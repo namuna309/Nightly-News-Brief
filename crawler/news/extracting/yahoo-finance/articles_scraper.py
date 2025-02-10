@@ -61,8 +61,12 @@ class ArticlesScraper:
             author_links = byline_author.find_all("a")
             if author_links:
                 self.article['authors'] = [a.get_text(strip=True) for a in author_links]
+                
+                if self.article['authors'] == ['']:
+                    author_img = author_links[0].find('img')
+                    self.article['authors'] = [author_img['alt'].split(', ')[0]]
             else:
-                authors_text = byline_author.get_text(strip=True)
+                authors_text = byline_author.find(strip=True)
                 self.article['authors'] = [author.strip() for author in authors_text.split(', ')] if ',' in authors_text else [authors_text.strip()]
         else:
             self.article['authors'] = []
@@ -90,7 +94,7 @@ class ArticlesScraper:
 
 
 if __name__ == "__main__":
-    url = "https://finance.yahoo.com/news/entegris-nasdaq-entg-q4-beats-110506608.html"
+    url = "https://finance.yahoo.com/personal-finance/mortgages/article/mortgage-refinance-rates-today-friday-february-7-2025-110008175.html"
     scraper = ArticlesScraper(url)
     article = scraper.scrape()
     print(article)
