@@ -8,16 +8,6 @@ from articles_scraper import ArticlesScraper
 class YahooFinanceScraper:
     """Yahoo Finance에서 뉴스 링크를 수집하고 기사를 스크랩하는 클래스"""
 
-    THEME_URLS = {
-        "Stock_Market": "https://finance.yahoo.com/topic/stock-market-news/",
-        "Original": "https://finance.yahoo.com/topic/yahoo-finance-originals/",
-        "Economies": "https://finance.yahoo.com/topic/economic-news/",
-        "Earning": "https://finance.yahoo.com/topic/earnings/",
-        "Tech": "https://finance.yahoo.com/topic/tech/",
-        "Housing": "https://finance.yahoo.com/topic/housing-market/",
-        "Crypto": "https://finance.yahoo.com/topic/crypto/"
-    }
-
     def __init__(self, save_dir="json"):
         self.save_dir = save_dir
         self.articles_by_theme = {}
@@ -35,69 +25,18 @@ class YahooFinanceScraper:
         scraper = ArticlesScraper(link)
         return scraper.scrape()
 
-    def scrape_articles(self):
+    def scrape_articles(self, theme, base_url):
         """각 테마별 기사 링크를 수집하고 기사 데이터를 병렬 스크랩하는 메서드"""
-        for theme, url in self.THEME_URLS.items():
-            article_links = self.get_article_links(theme, url)
-            theme_articles = []
+        
+        article_links = self.get_article_links(theme, base_url)
+        theme_articles = []
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                results = list(executor.map(self.scrape_article, article_links))
-                theme_articles.extend(results)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(self.scrape_article, article_links))
+            theme_articles.extend(results)
 
-            self.articles_by_theme[theme] = theme_articles
-            self.save_to_json(theme, theme_articles)
-
-    def save_to_json(self, theme, articles):
-        import os
-import json
-import concurrent.futures
-from links_scraper import LinksScraper
-from articles_scraper import ArticlesScraper
-from datetime import datetime
-
-class YahooFinanceScraper:
-    """Yahoo Finance에서 뉴스 링크를 수집하고 기사를 스크랩하는 클래스"""
-
-    THEME_URLS = {
-        "Stock Market": "https://finance.yahoo.com/topic/stock-market-news/",
-        "Original": "https://finance.yahoo.com/topic/yahoo-finance-originals/",
-        "Economies": "https://finance.yahoo.com/topic/economic-news/",
-        "Earning": "https://finance.yahoo.com/topic/earnings/",
-        "Tech": "https://finance.yahoo.com/topic/tech/",
-        "Housing": "https://finance.yahoo.com/topic/housing-market/",
-        "Crypto": "https://finance.yahoo.com/topic/crypto/"
-    }
-
-    def __init__(self, save_dir="json"):
-        self.save_dir = save_dir
-        self.articles_by_theme = {}
-
-    def get_article_links(self, theme, url):
-        """테마별 기사 링크를 수집하는 메서드"""
-        print(f"\n▶ [{theme}] 기사 링크 수집 중...")
-        links_scraper = LinksScraper(url)
-        article_links = links_scraper.get_article_links()
-        print(f"  → {len(article_links)}개의 기사 링크 추출됨.")
-        return article_links
-
-    def scrape_article(self, link):
-        """개별 기사 스크랩을 실행하는 메서드"""
-        scraper = ArticlesScraper(link)
-        return scraper.scrape()
-
-    def scrape_articles(self):
-        """각 테마별 기사 링크를 수집하고 기사 데이터를 병렬 스크랩하는 메서드"""
-        for theme, url in self.THEME_URLS.items():
-            article_links = self.get_article_links(theme, url)
-            theme_articles = []
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                results = list(executor.map(self.scrape_article, article_links))
-                theme_articles.extend(results)
-
-            self.articles_by_theme[theme] = theme_articles
-            self.save_to_json(theme, theme_articles)
+        self.articles_by_theme[theme] = theme_articles
+        self.save_to_json(theme, theme_articles)
 
     def save_to_json(self, theme, articles):
         """기사 데이터를 JSON 파일로 저장하는 메서드"""
@@ -120,10 +59,21 @@ class YahooFinanceScraper:
 
         print(f"  → [{theme}] 기사 데이터가 {file_path} 에 저장되었습니다.")
 
-    def run(self):
-        """전체 스크래핑 실행"""
-        self.scrape_articles()
 
 if __name__ == "__main__":
+    import time
+    start = time.time()
+    THEME_URLS = {
+        "Stock_Market": "https://finance.yahoo.com/topic/stock-market-news/",
+        "Original": "https://finance.yahoo.com/topic/yahoo-finance-originals/",
+        "Economies": "https://finance.yahoo.com/topic/economic-news/",
+        "Earning": "https://finance.yahoo.com/topic/earnings/",
+        "Tech": "https://finance.yahoo.com/topic/tech/",
+        "Housing": "https://finance.yahoo.com/topic/housing-market/",
+        "Crypto": "https://finance.yahoo.com/topic/crypto/"
+    }
+
     scraper = YahooFinanceScraper()
-    scraper.run()
+    for theme, base_url in THEME_URLS.items():
+        scraper.scrape_articles(theme, base_url)
+    print('time: ', time.time() - start)
