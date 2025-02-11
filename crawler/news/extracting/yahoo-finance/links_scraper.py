@@ -2,6 +2,8 @@ import re
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
@@ -87,12 +89,21 @@ class LinksScraper:
         입력 URL로 접속 후, 스크롤을 내려 날짜 정보를 업데이트하고,
         기사 링크(article_links)를 추출하여 반환합니다.
         """
-        self.driver.get(self.url)
-        time.sleep(3)  # 페이지 초기 로딩 대기
-        self.scroll_down_until_yesterday(max_scrolls=20, wait_time=2)
-        links = self.extract_article_links()
-        self.driver.quit()
-        return links
+        
+        for i in range(5):
+            self.driver.get(self.url)
+            try:
+                WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "publishing")))
+            except:
+                print('웹페이지 로딩 실패. 재시도 실행')
+                continue
+            else:
+                time.sleep(3)  # 페이지 초기 로딩 대기
+                self.scroll_down_until_yesterday(max_scrolls=20, wait_time=2)
+                links = self.extract_article_links()
+                self.driver.quit()
+                return links
+            
 
 # 사용 예제:
 if __name__ == "__main__":
