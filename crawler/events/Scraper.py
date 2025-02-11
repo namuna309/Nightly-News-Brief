@@ -47,16 +47,29 @@ class EconodayScraper:
             print("No HTML data to parse.")
             return
 
-        event_cell = self.soup.find(id="highlight_today")
+        table = self.soup.find('table', class_='eventstable')
+        dates = [td.get_text(strip=True).replace('\xa0', '-') for td in table.find_all('td')]
+        
+        today = datetime.today().strftime('%A-%b-%d')
+        d_idx = dates.index(today)
+        print(d_idx)
+        event_cell = self.soup.find_all('td', class_='events')[d_idx]
+        
         if not event_cell:
             print("No event data found.")
             return
 
-        event_datas = event_cell.find_all(attrs={'class': 'econoevents', 'data-country': 'US'})
-
+        event_datas = event_cell.find_all(lambda tag: (
+        tag.name == "div" and tag.get("class") and (
+                ("econoevents" in tag.get("class") and tag.get("data-country") == "US") or
+                ("econoalerts" in tag.get("class")) or
+                ("econoevents" in tag.get("class") and "speech" in tag.get("class"))
+            )
+        ))
+        
         for event in event_datas:
             event_title = event.find('a').get_text(strip=True) if event.find('a') else "Unknown Event"
-            event_time_raw = event.find('span').get_text(strip=True) if event.find('span') else "12:00 AM ET"
+            event_time_raw = event.find('span', class_='evnt_dt').get_text(strip=True) if event.find('span') else "12:00 AM ET"
 
             # " ET" 제거 후 시간 변환
             try:
@@ -67,7 +80,18 @@ class EconodayScraper:
             except ValueError:
                 event_time = "Invalid Time"
 
-            self.events.append({'title': event_title, 'at': event_time})
+            try:
+                djstar = event.find('span', class_='djstar-img')
+                star = event.find('span', class_='star-img')
+                event_stars = ''
+                if djstar:
+                    event_stars = '★' * 1
+                elif star:
+                    event_stars = '★' * 2
+            except ValueError as e:
+                event_stars = ''
+
+            self.events.append({'title': event_title, 'stars': event_stars, 'at': event_time, 'UTC': 'ET'})
 
     def save_to_json(self):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
