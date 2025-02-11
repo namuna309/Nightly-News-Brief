@@ -10,14 +10,13 @@ class YahooFinanceScraper:
 
     def __init__(self, save_dir="json"):
         self.save_dir = save_dir
-        self.articles_by_theme = {}
 
-    def get_article_links(self, theme, url):
+    def get_links(self, theme, base_url):
         """테마별 기사 링크를 수집하는 메서드"""
         print(f"\n▶ [{theme}] 기사 링크 수집 중...")
-        links_scraper = LinksScraper(url)
+        links_scraper = LinksScraper(base_url)
         article_links = links_scraper.get_article_links()
-        print(f"  → {len(article_links)}개의 기사 링크 추출됨.")
+        print(f"  → {len(article_links)}개의 [{theme}] 기사 링크 추출됨.")
         return article_links
 
     def scrape_article(self, link):
@@ -25,17 +24,14 @@ class YahooFinanceScraper:
         scraper = ArticlesScraper(link)
         return scraper.scrape()
 
-    def scrape_articles(self, theme, base_url):
+    def scrape_articles(self, theme, article_links):
         """각 테마별 기사 링크를 수집하고 기사 데이터를 병렬 스크랩하는 메서드"""
-        
-        article_links = self.get_article_links(theme, base_url)
         theme_articles = []
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             results = list(executor.map(self.scrape_article, article_links))
             theme_articles.extend(results)
 
-        self.articles_by_theme[theme] = theme_articles
         self.save_to_json(theme, theme_articles)
 
     def save_to_json(self, theme, articles):
@@ -74,6 +70,16 @@ if __name__ == "__main__":
     }
 
     scraper = YahooFinanceScraper()
-    for theme, base_url in THEME_URLS.items():
-        scraper.scrape_articles(theme, base_url)
+    theme_links = {theme: [] for theme in THEME_URLS.keys()}
+
+    def fetch_links(theme, base_url):
+        theme_links[theme] = scraper.get_links(theme, base_url)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(THEME_URLS)) as executor:
+        futures = [executor.submit(fetch_links, theme, base_url) for theme, base_url in THEME_URLS.items()]
+        for future in futures:
+            future.result()
+
+    for theme, article_links in theme_links.items():
+        scraper.scrape_articles(theme, article_links)
     print('time: ', time.time() - start)
