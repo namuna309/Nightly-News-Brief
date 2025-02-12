@@ -74,9 +74,9 @@ class InvestingCalendarScraper:
         self.driver.get("https://www.investing.com/economic-calendar/")
         time.sleep(2)  # 페이지 로딩 대기
 
-    def step_click_tomorrow(self):
+    def step_click_day(self):
         # "Tomorrow" 버튼 클릭 (버튼 ID가 "timeFrame_tomorrow")
-        tomorrow_button = self.wait.until(EC.element_to_be_clickable((By.ID, "timeFrame_tomorrow")))
+        tomorrow_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
         tomorrow_button.click()
         print("Tomorrow 버튼 클릭 완료")
         time.sleep(1)
@@ -153,9 +153,10 @@ class InvestingCalendarScraper:
             self.events.append(event)
             print(event)
 
-    def save_to_json(self):
+    def save_to_json(self, day):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
-        today = datetime.today()
+        
+        today = datetime.today() if day == 'tomorrow' else (datetime.today() - timedelta(days=1)).date()
         folder_name = os.path.join(
             'json',
             "events".upper(),  # "events"를 대문자로 변환
@@ -170,12 +171,12 @@ class InvestingCalendarScraper:
             json.dump(self.events, f, ensure_ascii=False, indent=4)
         print(f"Events saved to {file_path}")
 
-    def scrape_events(self):
+    def scrape_events(self, day):
         try:
             # 1. 페이지 접속
             self.execute_step(self.step_load_page, "페이지 접속")
             # 2. Tomorrow 버튼 클릭
-            self.execute_step(self.step_click_tomorrow, "Tomorrow 버튼 클릭")
+            self.execute_step(self.step_click_day, f"{day} 버튼 클릭")
             # 3. Filters 버튼 클릭
             self.execute_step(self.step_click_filters, "Filters 버튼 클릭")
             # 4. Clear 버튼 클릭
@@ -196,7 +197,8 @@ class InvestingCalendarScraper:
             self.driver.quit()
 
 if __name__ == '__main__':
-    scraper = InvestingCalendarScraper(headless=False)
-    events = scraper.scrape_events()
-    if events is not None:
-        scraper.save_to_json()
+    for day in ['today', 'tomorrow']:
+        scraper = InvestingCalendarScraper(headless=False)
+        events = scraper.scrape_events(day)
+        if events is not None:
+            scraper.save_to_json(day)
