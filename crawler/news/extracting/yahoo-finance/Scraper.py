@@ -51,7 +51,7 @@ class YahooFinanceScraper:
         file_path = os.path.join(folder_name, "articles.json")
 
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(articles, f, ensure_ascii=False, indent=4)
+            json.dump({'articles': articles}, f, ensure_ascii=False, indent=4)
 
         print(f"  → [{theme}] 기사 데이터가 {file_path} 에 저장되었습니다.")
 
