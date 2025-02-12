@@ -38,8 +38,16 @@ class InvestingCalendarScraper:
         """
         try:
             # 팝업이 있는지 XPath로 검사 (클래스 일부만 포함해도 됨)
-            popups = self.driver.find_elements(By.XPATH, "//*[contains(@class, 'auth_popup_darkBackground___oAw5')]")
+            popups = self.driver.find_elements(By.XPATH, "//*[contains(@class, 'js-gen-popup dark_graph')]")
             if popups:
+                # 웹 요소가 가려지지 않도록 오버레이 요소 제거
+                try:
+                    overlay = WebDriverWait(self.driver, 5).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, "js-general-overlay"))
+                    )
+                    self.driver.execute_script("arguments[0].style.display = 'none';", overlay)
+                except:
+                    print("Overlay not found or already hidden.")
                 close_buttons = self.driver.find_elements(By.CSS_SELECTOR, "i.popupCloseIcon.largeBannerCloser")
                 if close_buttons:
                     close_buttons[0].click()
@@ -78,7 +86,7 @@ class InvestingCalendarScraper:
         # "Tomorrow" 버튼 클릭 (버튼 ID가 "timeFrame_tomorrow")
         tomorrow_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
         tomorrow_button.click()
-        print("Tomorrow 버튼 클릭 완료")
+        print("날짜(Today, Tomorrow) 버튼 클릭 완료")
         time.sleep(1)
 
     def step_click_filters(self):
@@ -124,34 +132,43 @@ class InvestingCalendarScraper:
                 'previous': None,
                 'unit': None
             }
-            # 시간은 24시간 형식 ("%H:%M")
-            time_str = row.find_element(By.CLASS_NAME, "time").text.strip()
-            event_time = datetime.strptime(time_str, "%H:%M").time()
-            event['time'] = datetime.combine(tomorrow_date, event_time).isoformat()
-            # 국가명 추출
-            event['country'] = row.find_element(By.CLASS_NAME, "flagCur").text.strip()
-            # 변동성: 아이콘 개수
-            event['volatility'] = len(row.find_elements(By.CLASS_NAME, "grayFullBullishIcon"))
-            # 제목 추출
-            event['title'] = row.find_element(By.CLASS_NAME, 'event').text.strip()
-            # Actual, Forecast, Previous 값 추출
-            actual = row.find_element(By.CLASS_NAME, 'act').text.strip()
-            forecast = row.find_element(By.CLASS_NAME, 'fore').text.strip()
-            previous = row.find_element(By.CLASS_NAME, 'prev').text.strip()
+            try:
+                # 시간은 24시간 형식 ("%H:%M")
+                time_str = row.find_element(By.CLASS_NAME, "time").text.strip()
+                event_time = datetime.strptime(time_str, "%H:%M").time()
+                event['time'] = datetime.combine(tomorrow_date, event_time).isoformat()
+                # 국가명 추출
+                event['country'] = row.find_element(By.XPATH, "//td[@class='left flagCur noWrap']/span").get_attribute("title")
+                # 변동성: 아이콘 개수
+                event['volatility'] = len(row.find_elements(By.CLASS_NAME, "grayFullBullishIcon"))
+                # 제목 추출
+                event['title'] = row.find_element(By.CLASS_NAME, 'event').text.strip()
+                # Actual, Forecast, Previous 값 추출
+                actual = row.find_element(By.CLASS_NAME, 'act').text.strip()
+                forecast = row.find_element(By.CLASS_NAME, 'fore').text.strip()
+                previous = row.find_element(By.CLASS_NAME, 'prev').text.strip()
+                
+                # 단위가 포함된 경우 (마지막 문자가 숫자가 아니면)
+                if previous and previous[-1] not in '0123456789': 
+                    event['unit'] = previous[-1]               
+                    actual = actual[:-1] if actual else actual
+                    forecast = forecast[:-1] if forecast else forecast
+                    previous = previous[:-1] if previous else previous
+                else:
+                    actual = actual if actual else ''
+                    forecast = forecast if forecast else ''
+                    previous = previous if previous else ''
+                actual = actual.replace(',' ,'') if ',' in actual else actual
+                forecast = forecast.replace(',' ,'') if ',' in forecast else forecast
+                previous = previous.replace(',' ,'') if ',' in previous else previous
 
-            # 단위가 포함된 경우 (마지막 문자가 숫자가 아니면)
-            if previous and previous[-1] not in '0123456789':
-                event['actual'] = float(actual[:-1]) if actual else None
-                event['forecast'] = float(forecast[:-1]) if forecast else None
-                event['previous'] = float(previous[:-1]) if previous else None
-                event['unit'] = previous[-1]
-            else:
                 event['actual'] = float(actual) if actual else None
                 event['forecast'] = float(forecast) if forecast else None
                 event['previous'] = float(previous) if previous else None
-
-            self.events.append(event)
-            print(event)
+                self.events.append(event)
+            except Exception as e:
+                print(e)
+                continue
 
     def save_to_json(self, day):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
@@ -168,7 +185,7 @@ class InvestingCalendarScraper:
         file_path = os.path.join(folder_name, "events.json")
 
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(self.events, f, ensure_ascii=False, indent=4)
+            json.dump({'events': self.events}, f, ensure_ascii=False, indent=4)
         print(f"Events saved to {file_path}")
 
     def scrape_events(self, day):
