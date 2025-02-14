@@ -11,7 +11,6 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 from datetime import datetime, timedelta
-from decimal import Decimal  # 필요시 사용
 
 class InvestingCalendarScraper:
     def __init__(self, headless=False):
@@ -31,6 +30,11 @@ class InvestingCalendarScraper:
         # 명시적 대기 객체 (최대 10초)
         self.wait = WebDriverWait(self.driver, 10)
         self.earnings = []
+        self.page = {
+            'url': "https://www.investing.com/earnings-calendar/",
+            'timestamp': datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            'content': None
+        }
     
     def window_maximize(self):
         self.driver.maximize_window()
@@ -241,13 +245,19 @@ class InvestingCalendarScraper:
             value = None
         return value, unit
 
+    def step_extract_page_source(self):
+        try:
+            self.page['content'] = self.driver.page_source
+        except Exception as e:
+            print(e)
+
     def save_to_json(self, day):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
         
         today = datetime.today() if day == 'tomorrow' else (datetime.today() - timedelta(days=1)).date()
         folder_name = os.path.join(
             'json',
-            "earnings".upper(),  # "earnings"를 대문자로 변환
+            "earning_calls".upper(),  # "earnings"를 대문자로 변환
             f"year={today.year}",
             f"month={today.strftime('%m')}",
             f"day={today.strftime('%d')}"
@@ -255,9 +265,13 @@ class InvestingCalendarScraper:
         os.makedirs(folder_name, exist_ok=True)
         file_path = os.path.join(folder_name, "earning.json")
 
+        # with open(file_path, "w", encoding="utf-8") as f:
+        #     json.dump({'earnings': self.earnings}, f, ensure_ascii=False, indent=4)
+        # print(f"earnings saved to {file_path}")
+
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump({'earnings': self.earnings}, f, ensure_ascii=False, indent=4)
-        print(f"earnings saved to {file_path}")
+            json.dump(self.page, f, ensure_ascii=False, indent=4)
+        print(f"Events saved to {file_path}")
 
     def scrape_earnings(self, day):
         try:
@@ -285,9 +299,38 @@ class InvestingCalendarScraper:
         finally:
             self.driver.quit()
 
+    def scrape_page_source(self, day):
+        try:
+            self.window_maximize()
+            # 1. 페이지 접속
+            self.execute_step(self.step_load_page, "페이지 접속")
+            # 2. Tomorrow 버튼 클릭
+            self.execute_step(self.step_click_day, f"{day} 버튼 클릭")
+            # 3. Filters 버튼 클릭
+            self.execute_step(self.step_click_filters, "Filters 버튼 클릭")
+            # 4. Clear 버튼 클릭
+            self.execute_step(self.step_click_clear, "Clear 버튼 클릭")
+            # 5. United States 체크박스 클릭
+            self.execute_step(self.step_click_us_checkbox, "United States 체크박스 클릭")
+            # 6. Apply 버튼 클릭
+            self.execute_step(self.step_click_apply, "Apply 버튼 클릭")
+            # 7. 페이지 소스 추출
+            self.execute_step(self.step_extract_page_source, "Page Source 추출")
+            
+            return self.page
+
+        except Exception as e:
+            print("스크래핑 도중 에러 발생:", e)
+            return None
+        finally:
+            self.driver.quit()
+
 if __name__ == '__main__':
     for day in ['today', 'tomorrow']:
-        scraper = InvestingCalendarScraper(headless=False)
-        earnings = scraper.scrape_earnings(day)
-        if earnings is not None:
+        scraper = InvestingCalendarScraper(headless=True)
+        # earnings = scraper.scrape_earnings(day)
+        # if earnings is not None:
+        #     scraper.save_to_json(day)
+        page = scraper.scrape_page_source(day)
+        if page is not None:
             scraper.save_to_json(day)
