@@ -13,6 +13,8 @@ import time
 from datetime import datetime, timedelta
 from decimal import Decimal  # 필요시 사용
 
+from bs4 import BeautifulSoup
+
 class InvestingCalendarScraper:
     def __init__(self, headless=False):
         # Chrome 옵션 설정
@@ -188,7 +190,9 @@ class InvestingCalendarScraper:
 
     def step_extract_page_source(self):
         try:
-            self.page['content'] = self.driver.page_source
+            html = self.driver.page_source
+            soup = BeautifulSoup(html, "html.parser").prettify()
+            self.page['content'] = soup
         except Exception as e:
             print(e)
         
