@@ -2,6 +2,7 @@ import os
 import json
 import concurrent.futures
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from links_scraper import LinksScraper
 from page_scraper import PagesScraper
 
@@ -37,10 +38,11 @@ class YahooFinanceScraper:
 
     def save_to_json(self, theme, page_data):
         """기사 데이터를 JSON 파일로 저장하는 메서드"""
-        today = datetime.today()
+        today = datetime.now(ZoneInfo("America/New_York")).date()
         title = page_data['url'].rsplit("/", 1)[-1].replace(".html", "").replace('-', '_')
         folder_name = os.path.join(
             self.save_dir,
+            'ARTICLES',
             theme.replace(" ", "_").upper() if ' ' in theme else theme.upper(),  # 공백을 언더바로 변경
             f"year={today.year}",
             f"month={today.strftime('%m')}",
