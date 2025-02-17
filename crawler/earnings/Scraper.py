@@ -2,6 +2,7 @@ import os
 import json
 import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -103,10 +104,10 @@ class InvestingCalendarScraper:
         time.sleep(2)  # 페이지 로딩 대기
 
     def step_click_day(self):
-        # "Tomorrow" 버튼 클릭 (버튼 ID가 "timeFrame_tomorrow")
-        tomorrow_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
-        tomorrow_button.click()
-        print("날짜(Today, Tomorrow) 버튼 클릭 완료")
+        # "Yesterday" 버튼 클릭 (버튼 ID가 "timeFrame_yesterday")
+        day_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
+        day_button.click()
+        print("날짜(Today, Yesterday) 버튼 클릭 완료")
         time.sleep(1)
 
     def step_click_filters(self):
@@ -253,8 +254,7 @@ class InvestingCalendarScraper:
 
     def save_to_json(self, day):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
-        
-        today = datetime.today() if day == 'tomorrow' else (datetime.today() - timedelta(days=1)).date()
+        today = datetime.now(ZoneInfo("America/New_York")).date() if day == 'today' else (datetime.today() - timedelta(days=1)).date()
         folder_name = os.path.join(
             'json',
             "earning_calls".upper(),  # "earnings"를 대문자로 변환
@@ -273,31 +273,6 @@ class InvestingCalendarScraper:
             json.dump(self.page, f, ensure_ascii=False, indent=4)
         print(f"Events saved to {file_path}")
 
-    def scrape_earnings(self, day):
-        try:
-            self.window_maximize()
-            # 1. 페이지 접속
-            self.execute_step(self.step_load_page, "페이지 접속")
-            # 2. Tomorrow 버튼 클릭
-            self.execute_step(self.step_click_day, f"{day} 버튼 클릭")
-            # 3. Filters 버튼 클릭
-            self.execute_step(self.step_click_filters, "Filters 버튼 클릭")
-            # 4. Clear 버튼 클릭
-            self.execute_step(self.step_click_clear, "Clear 버튼 클릭")
-            # 5. United States 체크박스 클릭
-            self.execute_step(self.step_click_us_checkbox, "United States 체크박스 클릭")
-            # 6. Apply 버튼 클릭
-            self.execute_step(self.step_click_apply, "Apply 버튼 클릭")
-            # 7. 이벤트 데이터 추출
-            self.execute_step(self.step_extract_earnings, "이벤트 데이터 추출")
-            
-            return self.earnings
-
-        except Exception as e:
-            print("스크래핑 도중 에러 발생:", e)
-            return None
-        finally:
-            self.driver.quit()
 
     def scrape_page_source(self, day):
         try:
@@ -326,11 +301,8 @@ class InvestingCalendarScraper:
             self.driver.quit()
 
 if __name__ == '__main__':
-    for day in ['today', 'tomorrow']:
+    for day in ['yesterday', 'today']:
         scraper = InvestingCalendarScraper(headless=True)
-        # earnings = scraper.scrape_earnings(day)
-        # if earnings is not None:
-        #     scraper.save_to_json(day)
         page = scraper.scrape_page_source(day)
         if page is not None:
             scraper.save_to_json(day)

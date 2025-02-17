@@ -1,11 +1,12 @@
 import os
 import json
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 import pandas as pd
 
 
-today = (datetime.today() - timedelta(days=1)).date()
+today = datetime.now(ZoneInfo("America/New_York")).date()
 folder_name = os.path.join(
     'json',
     "events".upper(),  # "earnings"를 대문자로 변환

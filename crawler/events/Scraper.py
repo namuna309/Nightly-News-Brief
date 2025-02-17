@@ -2,6 +2,7 @@ import os
 import json
 import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -101,10 +102,10 @@ class InvestingCalendarScraper:
         time.sleep(2)  # 페이지 로딩 대기
 
     def step_click_day(self):
-        # "Tomorrow" 버튼 클릭 (버튼 ID가 "timeFrame_tomorrow")
-        tomorrow_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
-        tomorrow_button.click()
-        print("날짜(Today, Tomorrow) 버튼 클릭 완료")
+        # "Yesterday" 버튼 클릭 (버튼 ID가 "timeFrame_yesterday")
+        day_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
+        day_button.click()
+        print("날짜(Today, Yesterday) 버튼 클릭 완료")
         time.sleep(1)
 
     def step_click_filters(self):
@@ -136,7 +137,7 @@ class InvestingCalendarScraper:
     def step_extract_events(self):
         # 클래스가 'js-event-item'인 모든 <tr> 요소를 찾고 데이터를 추출합니다.
         event_rows = self.wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "tr.js-event-item")))
-        tomorrow_date = (datetime.today() + timedelta(days=1)).date()
+        today = datetime.now(ZoneInfo("America/New_York")).date() if day == 'today' else (datetime.today() - timedelta(days=1)).date()
         print("\n추출된 이벤트 데이터:")
         for row in event_rows:
             event = {
@@ -154,7 +155,7 @@ class InvestingCalendarScraper:
                 # 시간은 24시간 형식 ("%H:%M")
                 time_str = row.find_element(By.CLASS_NAME, "time").text.strip()
                 event_time = datetime.strptime(time_str, "%H:%M").time()
-                event['time'] = datetime.combine(tomorrow_date, event_time).isoformat()
+                event['time'] = datetime.combine(today, event_time).isoformat()
                 # 국가명 추출
                 event['country'] = row.find_element(By.XPATH, "//td[@class='left flagCur noWrap']/span").get_attribute("title")
                 # 변동성: 아이콘 개수
@@ -199,7 +200,7 @@ class InvestingCalendarScraper:
     def save_to_json(self, day):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
         
-        today = datetime.today() if day == 'tomorrow' else (datetime.today() - timedelta(days=1)).date()
+        today = datetime.now(ZoneInfo("America/New_York")).date() if day == 'today' else (datetime.today() - timedelta(days=1)).date()
         folder_name = os.path.join(
             'json',
             "events".upper(),  # "events"를 대문자로 변환
@@ -268,7 +269,7 @@ class InvestingCalendarScraper:
             self.driver.quit()
 
 if __name__ == '__main__':
-    for day in ['today', 'tomorrow']:
+    for day in ['yesterday', 'today']:
         scraper = InvestingCalendarScraper(headless=True)
         # events = scraper.scrape_events(day)
         # if events is not None:

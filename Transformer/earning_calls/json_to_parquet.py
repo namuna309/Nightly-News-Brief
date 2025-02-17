@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 import pandas as pd
 
@@ -31,7 +32,7 @@ def parse_value(cell_text, lstrip_chars= ""):
             value = None
         return value, unit
 
-today = (datetime.today() - timedelta(days=1)).date()
+today = datetime.now(ZoneInfo("America/New_York")).date()
 folder_name = os.path.join(
     'json',
     "earning_calls".upper(),  # "earnings"를 대문자로 변환
@@ -52,7 +53,6 @@ earning_datas = []
 
 # 클래스가 'js-event-item'인 모든 <tr> 요소를 찾고 데이터를 추출합니다.
 earning_rows = soup.select("#earningsCalendarData tbody tr")
-tomorrow_date = (datetime.today() + timedelta(days=1)).date()
 
 print("\n추출된 이벤트 데이터:")
 for row in earning_rows[1:]:
