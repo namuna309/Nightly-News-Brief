@@ -95,7 +95,7 @@ class LinksScraper:
             try:
                 WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "publishing")))
             except:
-                print('웹페이지 로딩 실패. 재시도 실행')
+                print(f'{self.url}웹페이지 로딩 실패. 재시도 실행')
                 continue
             else:
                 time.sleep(3)  # 페이지 초기 로딩 대기

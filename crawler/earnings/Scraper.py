@@ -107,7 +107,7 @@ class InvestingCalendarScraper:
         # "Yesterday" 버튼 클릭 (버튼 ID가 "timeFrame_yesterday")
         day_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
         day_button.click()
-        print("날짜(Today, Yesterday) 버튼 클릭 완료")
+        print(f"{day} 버튼 클릭 완료")
         time.sleep(1)
 
     def step_click_filters(self):
@@ -254,7 +254,13 @@ class InvestingCalendarScraper:
 
     def save_to_json(self, day):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
-        today = datetime.now(ZoneInfo("America/New_York")).date() if day == 'today' else (datetime.today() - timedelta(days=1)).date()
+        now = datetime.now(ZoneInfo("America/New_York"))
+        if day == 'today':
+            today = now
+        elif day == 'yesterday':
+            today = now - timedelta(days=1)
+        elif day == 'tomorrow':
+            today = now + timedelta(days=1)
         folder_name = os.path.join(
             'json',
             "earning_calls".upper(),  # "earnings"를 대문자로 변환
@@ -301,7 +307,7 @@ class InvestingCalendarScraper:
             self.driver.quit()
 
 if __name__ == '__main__':
-    for day in ['yesterday', 'today']:
+    for day in ['yesterday', 'today', 'tomorrow']:
         scraper = InvestingCalendarScraper(headless=True)
         page = scraper.scrape_page_source(day)
         if page is not None:

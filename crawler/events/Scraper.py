@@ -101,11 +101,11 @@ class InvestingCalendarScraper:
         self.driver.get(self.page['url'])
         time.sleep(2)  # 페이지 로딩 대기
 
-    def step_click_day(self):
+    def step_click_day(self, txt):
         # "Yesterday" 버튼 클릭 (버튼 ID가 "timeFrame_yesterday")
         day_button = self.wait.until(EC.element_to_be_clickable((By.ID, f"timeFrame_{day}")))
         day_button.click()
-        print("날짜(Today, Yesterday) 버튼 클릭 완료")
+        print(f"{day} 버튼 클릭 완료")
         time.sleep(1)
 
     def step_click_filters(self):
@@ -137,7 +137,13 @@ class InvestingCalendarScraper:
     def step_extract_events(self):
         # 클래스가 'js-event-item'인 모든 <tr> 요소를 찾고 데이터를 추출합니다.
         event_rows = self.wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "tr.js-event-item")))
-        today = datetime.now(ZoneInfo("America/New_York")).date() if day == 'today' else (datetime.today() - timedelta(days=1)).date()
+        now = datetime.now(ZoneInfo("America/New_York"))
+        if day == 'today':
+            today = now
+        elif day == 'yesterday':
+            today = now - timedelta(days=1)
+        elif day == 'tomorrow':
+            today = now + timedelta(days=1)
         print("\n추출된 이벤트 데이터:")
         for row in event_rows:
             event = {
@@ -199,8 +205,13 @@ class InvestingCalendarScraper:
         
     def save_to_json(self, day):
         """추출한 데이터를 JSON 파일로 저장하는 메서드"""
-        
-        today = datetime.now(ZoneInfo("America/New_York")).date() if day == 'today' else (datetime.today() - timedelta(days=1)).date()
+        now = datetime.now(ZoneInfo("America/New_York"))
+        if day == 'today':
+            today = now
+        elif day == 'yesterday':
+            today = now - timedelta(days=1)
+        elif day == 'tomorrow':
+            today = now + timedelta(days=1)
         folder_name = os.path.join(
             'json',
             "events".upper(),  # "events"를 대문자로 변환
@@ -269,7 +280,7 @@ class InvestingCalendarScraper:
             self.driver.quit()
 
 if __name__ == '__main__':
-    for day in ['yesterday', 'today']:
+    for day in ['yesterday', 'today', 'tomorrow']:
         scraper = InvestingCalendarScraper(headless=True)
         # events = scraper.scrape_events(day)
         # if events is not None:
