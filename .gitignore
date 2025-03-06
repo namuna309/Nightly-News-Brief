@@ -1,3 +1,5 @@
 venv
 json
+parquet
 __pycache__
+.env

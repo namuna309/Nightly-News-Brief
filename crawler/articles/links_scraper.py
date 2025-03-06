@@ -1,5 +1,6 @@
 import re
 import time
+import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
@@ -14,10 +15,16 @@ class LinksScraper:
         # Selenium 옵션 설정 (헤드리스 모드)
         options = webdriver.ChromeOptions()
         options.add_argument("--headless")  # 브라우저 창을 띄우지 않음
+        options.add_argument("--enable-unsafe-swiftshader")
         options.add_argument('--ignore-certificate-errors')
         options.add_argument('--ignore-certificate-errors-spki-list')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument(f'user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.87 Safari/537.36')
+        options.add_argument('--no-sandbox')
         options.add_argument('--ignore-ssl-errors')
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
+
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
     def scroll_down_until_yesterday(self, max_scrolls=20, wait_time=2):
@@ -95,7 +102,7 @@ class LinksScraper:
             try:
                 WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "publishing")))
             except:
-                print('웹페이지 로딩 실패. 재시도 실행')
+                print(f'{self.url}웹페이지 로딩 실패. 재시도 실행')
                 continue
             else:
                 time.sleep(3)  # 페이지 초기 로딩 대기
