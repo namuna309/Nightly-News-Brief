@@ -27,6 +27,8 @@ class InvestingCalendarScraper:
         options.add_argument('--ignore-ssl-errors')
         options.add_experimental_option('excludeSwitches', ['enable-logging'])
         options.add_experimental_option("detach", True)  # 브라우저가 자동으로 닫히지 않도록 설정
+        options.add_argument('--disable-gpu')
+        options.add_argument('--no-sandbox')
 
         # WebDriver 실행
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
