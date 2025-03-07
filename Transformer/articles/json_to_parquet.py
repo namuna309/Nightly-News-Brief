@@ -1,6 +1,5 @@
 import os
 import json
-import glob
 import sys
 import pyspark.pandas as ps
 from datetime import datetime
@@ -8,7 +7,6 @@ from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 from pyspark.sql import SparkSession
 import concurrent.futures
-import numpy as np
 import warnings
 from pyspark.conf import SparkConf
 from urllib.parse import unquote
@@ -24,8 +22,6 @@ S3_REGION = unquote(os.environ.get('S3_REGION'))  # AWS 시크릿 키 로드
 BUCKET_NAME = unquote(os.environ.get('BUCKET_NAME')) 
 os.environ['PYSPARK_PYTHON'] = sys.executable
 os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
-os.environ["PYARROW_IGNORE_TIMEZONE"] = "1"
-warnings.filterwarnings("ignore", category=UserWarning, module="pyspark.pandas")
 
 s3_client = boto3.client(  # S3 클라이언트 생성
     service_name='s3',
@@ -35,10 +31,6 @@ s3_client = boto3.client(  # S3 클라이언트 생성
 )
 
 conf = SparkConf()
-conf.set("spark.executor.memory", "2g")  # 적절한 메모리 설정
-conf.set("spark.driver.memory", "2g")
-conf.set("spark.network.timeout", "600s")  # 네트워크 타임아웃 증가
-conf.set("spark.python.worker.reuse", "true")  # Python worker 재사용 활성화
 conf.set('spark.driver.host', '127.0.0.1')  # Spark 드라이버 호스트 설정
 conf.set('spark.hadoop.fs.s3a.access.key', AWS_ACCESS_KEY)  # S3 액세스 키 설정
 conf.set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)  # S3 시크릿 키 설정
@@ -52,8 +44,7 @@ spark = SparkSession.builder.config(conf=conf).master("local[4]").appName("JSON_
 today = datetime.now(ZoneInfo("America/New_York")).date()
 
 # 테마 설정
-# THEMES = ['Stock_Market', 'Original', 'Economies', 'Earning', 'Tech', 'Housing', 'Crypto']
-THEMES = ['Stock_Market']
+THEMES = ['Stock_Market', 'Original', 'Economies', 'Earning', 'Tech', 'Housing', 'Crypto']
 
 
 def get_prefix(data_stage, theme):
@@ -79,8 +70,6 @@ def load_json_files():
 
 def extract_article_data(file_path):
     """JSON 파일에서 HTML 파싱 및 기사 데이터 추출"""
-    # with open(file_path, 'r', encoding='utf-8') as f:
-    #     article = json.load(f)
     object = s3_client.get_object(Bucket=BUCKET_NAME, Key=file_path)
     print(f"{file_path}: s3 object read 완료")
     article = json.loads(object['Body'].read())
