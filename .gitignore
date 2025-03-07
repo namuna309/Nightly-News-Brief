@@ -3,3 +3,4 @@ json
 parquet
 __pycache__
 .env
+logs
