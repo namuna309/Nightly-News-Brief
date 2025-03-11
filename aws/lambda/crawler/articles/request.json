@@ -1,4 +1,4 @@
 {
-    "theme": "Stock_Market",
-    "url": "https://finance.yahoo.com/topic/stock-market-news/"
+    "theme": "latest",
+    "url": "https://finance.yahoo.com/topic/latest-news/"
 }
