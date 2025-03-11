@@ -30,7 +30,7 @@ spark = SparkSession.builder.appName("Yahoo_Finanace_Json_to_Parquet").getOrCrea
 today = datetime.now(ZoneInfo("America/New_York")).date()
 
 # 테마 설정
-THEMES = ['Stock_Market', 'Original', 'Economies', 'Earning', 'Tech', 'Housing', 'Crypto']
+THEMES = ['Stock_Market', 'Original', 'Economies', 'Earning', 'Tech', 'Housing', 'Crypto', 'Latest']
 
 
 def get_prefix(data_stage, theme):
