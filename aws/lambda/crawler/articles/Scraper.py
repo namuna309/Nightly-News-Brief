@@ -200,7 +200,7 @@ class ChromeDriver:
             raise Exception("All attempts failed")
         time.sleep(3)
         print(f'{url}웹페이지 로딩 성공')
-        until = 'yesterday' if theme != 'latest' else None
+        until = 'yesterday' if theme != 'Latest' else None
         self.scroll_down(max_scrolls=20, wait_time=2, until=until)
         links = self.extract_article_links(until=until)
         return links
