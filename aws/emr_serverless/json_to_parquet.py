@@ -1,44 +1,30 @@
+import sys
 import os
 import json
-import sys
-import pyspark.pandas as ps
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 from pyspark.sql import SparkSession
 import concurrent.futures
-import warnings
-from pyspark.conf import SparkConf
 from urllib.parse import unquote
 import boto3
-from dotenv import load_dotenv
 
-load_dotenv()
+# 환경 변수 설정
+json_args = sys.argv[1]  # "{\"S3_REGION\": \"ap-northeast-2\", \"BUCKET_NAME\": \"nightly-news-brief\"}"
+args = json.loads(json_args)
 
-# 환경 변수 설정 (PyArrow 오류 방지)
-AWS_ACCESS_KEY = unquote(os.environ.get('AWS_ACCESS_KEY'))  # AWS 액세스 키 로드
-AWS_SECRET_KEY = unquote(os.environ.get('AWS_SECRET_KEY'))  # AWS 시크릿 키 로드
-S3_REGION = unquote(os.environ.get('S3_REGION'))
-BUCKET_NAME = unquote(os.environ.get('BUCKET_NAME')) 
-os.environ['PYSPARK_PYTHON'] = sys.executable
-os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
+# 값 추출
+S3_REGION = args["S3_REGION"]      # "ap-northeast-2"
+BUCKET_NAME = args["BUCKET_NAME"]  # "nightly-news-brief"
+
 
 s3_client = boto3.client(  # S3 클라이언트 생성
     service_name='s3',
-    aws_access_key_id=AWS_ACCESS_KEY,
-    aws_secret_access_key=AWS_SECRET_KEY,
     region_name=S3_REGION
 )
 
-conf = SparkConf()
-conf.set('spark.driver.host', '127.0.0.1')  # Spark 드라이버 호스트 설정
-conf.set('spark.hadoop.fs.s3a.access.key', AWS_ACCESS_KEY)  # S3 액세스 키 설정
-conf.set('spark.hadoop.fs.s3a.secret.key', AWS_SECRET_KEY)  # S3 시크릿 키 설정
-conf.set("spark.jars.packages", 'org.apache.hadoop:hadoop-aws:3.3.4')  # S3 패키지 설정
-
-
 # SparkSession 생성
-spark = SparkSession.builder.config(conf=conf).master("local[4]").appName("JSON_to_Parquet").getOrCreate()
+spark = SparkSession.builder.appName("Yahoo_Finanace_Json_to_Parquet").getOrCreate()
 
 # 현재 날짜 (Eastern Time 기준)
 today = datetime.now(ZoneInfo("America/New_York")).date()
@@ -123,13 +109,13 @@ def extract_article_data(file_path):
 
 def save_to_s3(article_list, theme):
     """기사 데이터 리스트를 Parquet 형식으로 저장 (pandas-on-Spark 사용)"""
-    df = ps.DataFrame(article_list)  # pandas-on-Spark DataFrame 생성
-    spark_df = df.to_spark()
-    spark_df = spark_df.coalesce(1)
+    # Python 리스트를 Spark DataFrame으로 변환
+    spark_df = spark.createDataFrame(article_list)
+    spark_df = spark_df.coalesce(1)  # 단일 Parquet 파일로 저장
     prefix = get_prefix('TRANSFORMED', theme)
 
-    spark_df.write.option('header', 'true').mode('overwrite').parquet(f's3a://{BUCKET_NAME}/{prefix}')
-    print(f"🎯 Parquet 저장 완료: f's3a://{BUCKET_NAME}/{prefix}'")
+    spark_df.write.option('header', 'true').mode('overwrite').parquet(f's3://{BUCKET_NAME}/{prefix}')
+    print(f"🎯 Parquet 저장 완료: f's3://{BUCKET_NAME}/{prefix}'")
 
 def process_articles(url_per_themes):
     """테마별 JSON 파일을 처리 후 리스트로 저장 (병렬 처리)"""
@@ -149,9 +135,6 @@ def process_articles(url_per_themes):
             save_to_s3(article_list, theme)
 
 if __name__ == "__main__":
-    import time
-    start = time.time()
     file_paths = load_json_files()
     process_articles(file_paths)
-    print('time: ', time.time() - start)
     spark.stop()  # SparkSession 종료
