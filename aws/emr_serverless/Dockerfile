@@ -5,7 +5,7 @@ USER root
 
 # install python 3
 RUN yum install -y python3-pip && \
-    pip3 install beautifulsoup4 lxml
+    pip3 install beautifulsoup4 lxml psycopg2
 
 
 # EMRS will run the image as hadoop
