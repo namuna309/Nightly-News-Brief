@@ -1,14 +1,11 @@
 from airflow import DAG
 from airflow.operators.python import BranchPythonOperator
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
-from airflow.operators.dummy import DummyOperator
 from airflow.providers.amazon.aws.operators.emr import EmrServerlessStartJobOperator, EmrServerlessStopApplicationOperator
-from airflow.providers.amazon.aws.sensors.emr import EmrServerlessJobSensor
 from airflow.operators.empty import EmptyOperator
 from datetime import datetime
 from airflow.models import Variable
 import pendulum
-from airflow.sensors.time_sensor import TimeSensor
 
 # AWS Lambda 설정
 LAMBDA_FUNCTION_NAME = "article_scraper"
@@ -50,7 +47,7 @@ def check_transforming_time(**kwargs):
     hour = now.hour
     
     # 오전 7시 (07:00) 또는 오후 9시 (21:00) 체크
-    if (hour == 7) or (hour == 18):
+    if (hour == 7) or (hour == 21):
         return "extracting_articles_content"
     else:
         return "skip_emr"
