@@ -16,12 +16,12 @@ args = json.loads(json_args)
 # 값 추출
 S3_REGION = args["S3_REGION"]
 BUCKET_NAME = args["BUCKET_NAME"]
-REDSHIFT_HOST = args('REDSHIFT_HOST')
-REDSHIFT_DB = args('REDSHIFT_DB')
-REDSHIFT_USER = args('REDSHIFT_USER')
-REDSHIFT_PW = args('REDSHIFT_PW')
-REDSHIFT_PORT = args('REDSHIFT_PORT')
-REDSHIFT_IAM_ROLE = args('REDSHIFT_IAM_ROLE')
+REDSHIFT_HOST = args['REDSHIFT_HOST']
+REDSHIFT_DB = args['REDSHIFT_DB']
+REDSHIFT_USER = args['REDSHIFT_USER']
+REDSHIFT_PW = args['REDSHIFT_PW']
+REDSHIFT_PORT = args['REDSHIFT_PORT']
+REDSHIFT_IAM_ROLE = args['REDSHIFT_IAM_ROLE']
 
 s3_client = boto3.client(  # S3 클라이언트 생성
     service_name='s3',
@@ -57,6 +57,8 @@ def load_files(stage, format):
         print(f"prefix 추출 실패: {e}")
     else:
         print(f"{format}파일 s3 prefix 추출 완료")
+        for t, u in url_per_themes.items():
+            print(f"{t}: {u}")
         return url_per_themes
 
 def extract_article_data(file_path, theme):
