@@ -26,7 +26,7 @@ THEME_URLS = {
 }
 
 default_args = {
-    'start_date': datetime(2025, 3, 7),
+    'start_date': datetime(2025, 3, 13),
     'catchup': False
 }
 
@@ -38,7 +38,7 @@ def check_scraping_time(**kwargs):
     hour = now.hour
     
     # 오전 7시 (07:00) 또는 오후 9시 (21:00) 체크
-    if (hour == 7) or (hour == 18):
+    if (hour == 7) or (hour == 21):
         return [f"invoke_lambda_{theme}" for theme in THEME_URLS.keys()]
     else:
         return [f"invoke_lambda_Latest"]
