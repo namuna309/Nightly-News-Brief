@@ -12,7 +12,7 @@ default_args = {
     'catchup': False
 }
 
-with DAG(dag_id='earcing_calls_etl',
+with DAG(dag_id='earning_calls_etl',
         default_args=default_args,
         description='기업 earning call 데이터 ETL 파이프라인 workflow',
         schedule_interval='0 7,21 * * *',
@@ -21,7 +21,7 @@ with DAG(dag_id='earcing_calls_etl',
 
     start = EmptyOperator(task_id='start')
 
-    scarping_finance_events_task = LambdaInvokeFunctionOperator(
+    scarping_carning_calls_task = LambdaInvokeFunctionOperator(
             task_id = f"invoke_lambda_earning_calls",
             function_name = LAMBDA_FUNCTION_NAME,
             aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
@@ -30,4 +30,4 @@ with DAG(dag_id='earcing_calls_etl',
 
     end = EmptyOperator(task_id='end')
 
-    start >> scarping_finance_events_task >> end
+    start >> scarping_carning_calls_task >> end
