@@ -71,6 +71,7 @@ def extract_article_data(file_path, theme):
     article_data = {
         'title': '',
         'date': '',
+        'timezone': 'America/New_York',
         'authors': [],
         'article_publisher': '',
         'url': article['url'],
@@ -170,9 +171,10 @@ def save_to_redshift(file_path):
         CREATE TABLE IF NOT EXISTS raw_data.financial_articles (
             article_publisher VARCHAR(255),
             authors VARCHAR(500),
-            date TIMESTAMPTZ,
+            date TIMESTAMP,
             text VARCHAR(65535),
             theme VARCHAR(100),
+            timezone VARCHAR(100),
             title VARCHAR(500),
             url VARCHAR(1000)
         );
@@ -185,9 +187,10 @@ def save_to_redshift(file_path):
         CREATE TABLE IF NOT EXISTS raw_data.s3_import_table (
             article_publisher VARCHAR(255),
             authors VARCHAR(500),
-            date TIMESTAMPTZ,
+            date TIMESTAMP,
             text VARCHAR(65535),
             theme VARCHAR(100),
+            timezone VARCHAR(100),
             title VARCHAR(500),
             url VARCHAR(1000)
         );
@@ -253,7 +256,7 @@ def transform_to_parquet(url_per_themes):
             # 제1정규화 (1NF) - authors 리스트를 개별 행으로 변환
             normalized_df = normalized_1(spark_df, ["authors"])
             # ISO 8601 형식의 문자열을 unix_timestamp로 변환
-            df = normalized_df.withColumn("date", F.to_timestamp(F.col("date"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"))
+            df = normalized_df.withColumn("date", F.to_timestamp(F.col("date"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")).withColumn("date", F.from_utc_timestamp(F.col("date"), "America/New_York"))
             df.printSchema()
             save_to_s3(df, theme)
 
