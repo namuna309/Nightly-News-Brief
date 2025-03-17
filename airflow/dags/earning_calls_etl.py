@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
 
 # AWS Lambda 설정
-LAMBDA_FUNCTION_NAME = 'earning_call_scraper'
+EXTRACT_LAMBDA_FUNCTION_NAME = 'earning_call_scraper'
+TRANSFORM_LAMBDA_FUNCTION_NAME = 'earning_call_transformer'
 
 default_args = {
     'start_date': datetime(2025, 3, 14),
@@ -21,13 +22,20 @@ with DAG(dag_id='earning_calls_etl',
 
     start = EmptyOperator(task_id='start')
 
-    scarping_carning_calls_task = LambdaInvokeFunctionOperator(
-            task_id = f"invoke_lambda_earning_calls",
-            function_name = LAMBDA_FUNCTION_NAME,
+    scarping_earning_calls_task = LambdaInvokeFunctionOperator(
+            task_id = f"invoke_extracting_data_lambda",
+            function_name = EXTRACT_LAMBDA_FUNCTION_NAME,
             aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
             invocation_type = "RequestResponse"  # 동기 실행
         )
+    
+    json_to_parquet_earning_calls_task = LambdaInvokeFunctionOperator(
+        task_id = f"invoke_transforming_data_lambda",
+        function_name = TRANSFORM_LAMBDA_FUNCTION_NAME,
+        aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
+        invocation_type = "RequestResponse"  # 동기 실행
+    )
 
     end = EmptyOperator(task_id='end')
 
-    start >> scarping_carning_calls_task >> end
+    start >> scarping_earning_calls_task >> json_to_parquet_earning_calls_task >> end

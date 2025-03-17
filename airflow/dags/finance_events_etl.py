@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
 
 # AWS Lambda 설정
-LAMBDA_FUNCTION_NAME = 'event_scraper'
-
+EXTRACT_LAMBDA_FUNCTION_NAME = 'event_scraper'
+TRANSFORM_LAMBDA_FUNCTION_NAME = 'event_transformer'
 default_args = {
     'start_date': datetime(2025, 3, 14),
     'catchup': False
@@ -22,12 +22,19 @@ with DAG(dag_id='finance_events_etl',
     start = EmptyOperator(task_id='start')
 
     scarping_finance_events_task = LambdaInvokeFunctionOperator(
-            task_id = f"invoke_lambda_finance_events",
-            function_name = LAMBDA_FUNCTION_NAME,
+            task_id = f"invoke_extracting_data_lambda",
+            function_name = EXTRACT_LAMBDA_FUNCTION_NAME,
             aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
             invocation_type = "RequestResponse"  # 동기 실행
         )
+    
+    json_to_parquet_finance_events_task = LambdaInvokeFunctionOperator(
+        task_id = f"invoke_transforming_data_lambda",
+        function_name = TRANSFORM_LAMBDA_FUNCTION_NAME,
+        aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
+        invocation_type = "RequestResponse"  # 동기 실행
+    )
 
     end = EmptyOperator(task_id='end')
 
-    start >> scarping_finance_events_task >> end
+    start >> scarping_finance_events_task >> json_to_parquet_finance_events_task >> end
