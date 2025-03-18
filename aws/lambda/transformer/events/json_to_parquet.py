@@ -8,7 +8,6 @@ import boto3
 import awswrangler as wr
 from urllib.parse import unquote
 
-
 class S3Manager:
     def __init__(self):
         self.s3_region = unquote(os.environ.get('S3_REGION'))
@@ -22,7 +21,8 @@ class S3Manager:
     def save_to_s3(self, df, prefix):
         wr.s3.to_parquet(
             df=df,
-            path=f's3://{self.bucket_name}/{prefix}'
+            path=f's3://{self.bucket_name}/{prefix}',
+            index=False
         )
 
 class EventParser:
@@ -37,7 +37,7 @@ class EventParser:
         for row in event_rows:
             event = {
                 'time': None,
-                'utc': 'ET',
+                'timezone': 'America/New_York',
                 'country': None,
                 'volatility': None,
                 'title': None,
@@ -51,7 +51,7 @@ class EventParser:
                 if time_tag:
                     time_str = time_tag.text.strip()
                     event_time = datetime.strptime(time_str, "%H:%M").time()
-                    event['time'] = datetime.combine(tomorrow_date, event_time).isoformat()
+                    event['time'] = int(datetime.combine(tomorrow_date, event_time).timestamp() * 1000)
 
                 country_tag = row.select_one("td.left.flagCur.noWrap span")
                 if country_tag:
@@ -93,7 +93,19 @@ class EventTransformer:
         self.df = pd.DataFrame(event_data)
     
     def save_as_parquet(self, s3_manager, prefix):
+        if self.df.empty:  # DataFrame이 비어 있는지(지표 발표 일정이 있는지) 확인
+            return
         s3_manager.save_to_s3(self.df, prefix)
+    
+    def convert_type(self, cols, d_types):
+        if self.df.empty:  # DataFrame이 비어 있는지(지표 발표 일정이 있는지) 확인
+            return
+
+        for col, dtype in zip(cols, d_types):
+            if col in self.df.columns:
+                self.df[col] = self.df[col].astype(dtype)
+            else:
+                print(f"Column '{col}' not found.")
 
 class EventPipeline:
     def __init__(self):
@@ -105,7 +117,7 @@ class EventPipeline:
 
     def get_prefix(self, data_stage, format):
         return f"{data_stage}/EVENTS/year={self.day.year}/month={self.day.strftime('%m')}/day={self.day.strftime('%d')}/event.{format}"
-    
+
     def run(self):
         json_prefix = self.get_prefix('RAW', 'json')
         response = self.s3_manager.s3_client.get_object(Bucket=self.s3_manager.bucket_name, Key=json_prefix)
@@ -116,6 +128,7 @@ class EventPipeline:
         
         transformer = EventTransformer(event_data)
         parquet_prefix = self.get_prefix('TRANSFORMED', 'parquet')
+        transformer.convert_type(cols=['volatility', 'actual', 'forecast', 'previous'], d_types=['int16', 'float32', 'float32', 'float32'])
         transformer.save_as_parquet(self.s3_manager, parquet_prefix)
 
 def lambda_handler(event, context):
