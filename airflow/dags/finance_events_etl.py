@@ -7,6 +7,7 @@ from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeF
 # AWS Lambda 설정
 EXTRACT_LAMBDA_FUNCTION_NAME = 'event_scraper'
 TRANSFORM_LAMBDA_FUNCTION_NAME = 'event_transformer'
+LOAD_LAMBDA_FUNCTION_NAME = 'event_loader'
 default_args = {
     'start_date': datetime(2025, 3, 14),
     'catchup': False
@@ -21,20 +22,27 @@ with DAG(dag_id='finance_events_etl',
 
     start = EmptyOperator(task_id='start')
 
-    scarping_finance_events_task = LambdaInvokeFunctionOperator(
-            task_id = f"invoke_extracting_data_lambda",
+    scarping_financial_events_task = LambdaInvokeFunctionOperator(
+            task_id = "invoke_extracting_data_lambda",
             function_name = EXTRACT_LAMBDA_FUNCTION_NAME,
             aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
             invocation_type = "RequestResponse"  # 동기 실행
         )
     
-    json_to_parquet_finance_events_task = LambdaInvokeFunctionOperator(
-        task_id = f"invoke_transforming_data_lambda",
+    json_to_parquet_financial_events_task = LambdaInvokeFunctionOperator(
+        task_id = "invoke_transforming_data_lambda",
         function_name = TRANSFORM_LAMBDA_FUNCTION_NAME,
+        aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
+        invocation_type = "RequestResponse"  # 동기 실행
+    )
+
+    parquet_to_redshift_financial_evnets_task = LambdaInvokeFunctionOperator(
+        task_id = "invoke_loading_data_lambda",
+        function_name= LOAD_LAMBDA_FUNCTION_NAME,
         aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
         invocation_type = "RequestResponse"  # 동기 실행
     )
 
     end = EmptyOperator(task_id='end')
 
-    start >> scarping_finance_events_task >> json_to_parquet_finance_events_task >> end
+    start >> scarping_financial_events_task >> json_to_parquet_financial_events_task >> parquet_to_redshift_financial_evnets_task >> end
