@@ -53,11 +53,14 @@ class EarningsParser:
             value = None
         return value, unit
     
-    def extract_earnings(self):
+    def extract_earnings(self, daydelta):
         earnings = []
         rows = self.soup.select("#earningsCalendarData tbody tr")[1:]
         current_year = datetime.now().year
         current_quarter = (datetime.now().month - 1) // 3 + 1
+        today = datetime.now(ZoneInfo("UTC")).replace(hour=0, minute=0, second=0, microsecond=0)
+        call_date = (today - timedelta(days=daydelta)).timestamp()
+
         for row in rows:
             earning = {
                 'company': {'name': None, 'symbol': None},
@@ -66,7 +69,9 @@ class EarningsParser:
                 'revenue': {'actual': {'value': None, 'unit': None}, 'forecast': {'value': None, 'unit': None}},
                 'market_cap': {'value': None, 'unit': None},
                 'year': current_year,
-                'quarter' : current_quarter
+                'quarter' : current_quarter,
+                'call_date': int(call_date * 1000),
+                'timezone': 'America/New_York',
             }
             try:
                 earning['country'] = row.select_one("td.flag span").get("title") if row.select_one("td.flag span") else None
@@ -109,11 +114,41 @@ class EarningsTransformer:
                 "revenue_forecast_value": row["revenue"]["forecast"]["value"],
                 "revenue_forecast_unit": row["revenue"]["forecast"]["unit"],
                 "market_cap_value": row["market_cap"]["value"],
-                "market_cap_unit": row["market_cap"]["unit"]
+                "market_cap_unit": row["market_cap"]["unit"],
+                'call_date': row['call_date'],
+                'timezone': row['timezone'],
             }
             for _, row in self.df.iterrows()
         ])
         return df_olap
+    
+    def convert_dataframe_for_redshift(self, df):
+        dtype_mapping = {
+            "company_name": "string",     # VARCHAR(100)
+            "symbol": "string",           # VARCHAR(10)
+            "country": "string",          # VARCHAR(100)
+            "year": "int16",              # INT2
+            "quarter": "int16",           # INT2
+            "eps_actual_value": "float32",    # FLOAT4
+            "eps_actual_unit": "string",  # CHAR
+            "eps_forecast_value": "float32",  # FLOAT4
+            "eps_forecast_unit": "string",    # CHAR
+            "revenue_actual_value": "float32",  # FLOAT4
+            "revenue_actual_unit": "string",  # CHAR
+            "revenue_forecast_value": "float32",  # FLOAT4
+            "revenue_forecast_unit": "string",  # CHAR
+            "market_cap_value": "float32",  # FLOAT4
+            "market_cap_unit": "string",    # CHAR
+            "timezone": "string"
+        }
+
+        # 컬럼이 부족한 경우 대비하여 공통 컬럼만 변환
+        common_columns = df.columns.intersection(dtype_mapping.keys())
+        
+        # 데이터 타입 변환
+        df = df.astype({col: dtype_mapping[col] for col in common_columns})
+        
+        return df
     
     def convert_OLTP_json(self, earnings_data):
         json_oltp = {'data': earnings_data}
@@ -138,19 +173,20 @@ class EarningsPipeline:
     def get_prefix(self, data_stage, format):
         return f"{data_stage}/EARNING_CALLS/year={self.day.year}/month={self.day.strftime('%m')}/day={self.day.strftime('%d')}/earning.{format}"
         
-    def run(self):
+    def run(self, daydelta):
         raw_prefix = self.get_prefix('RAW', 'json')
         events = self.s3_manager.get_object(raw_prefix)
         parser = EarningsParser(events['content'])
-        earnings_data = parser.extract_earnings()
+        earnings_data = parser.extract_earnings(daydelta)
         
         transformer = EarningsTransformer(earnings_data)
 
         oltp_json = transformer.convert_OLTP_json(earnings_data)
-        json_prefix = self.get_prefix('TRANSFORMED', 'json')
+        json_prefix = self.get_prefix('OLTP', 'json')
         transformer.save_data(s3_manager=self.s3_manager, data=oltp_json, prefix=json_prefix, format='json')
 
         olap_df = transformer.convert_OLAP_df()
+        olap_df = transformer.convert_dataframe_for_redshift(olap_df)
         parquet_prefix = self.get_prefix('TRANSFORMED', 'parquet')
         transformer.save_data(s3_manager=self.s3_manager, data=olap_df, prefix=parquet_prefix, format='parquet')
 
@@ -160,5 +196,5 @@ def lambda_handler(event, context):
     pipeline = EarningsPipeline()
     for d in [-1, 0, 1]:
         pipeline.set_day(daydelta=d)
-        pipeline.run()
+        pipeline.run(daydelta=d)
     return {"statusCode": 200, "body": "Processing completed successfully"}
