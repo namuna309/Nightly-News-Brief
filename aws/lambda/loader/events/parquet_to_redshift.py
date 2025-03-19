@@ -70,7 +70,7 @@ def save_to_redshift(parquet_paths):
     print('1. 메인 테이블 (`financial_events`)이 없으면 생성')
     create_og_table_query = """
         CREATE TABLE IF NOT EXISTS raw_data.financial_events (
-            time TIMESTAMP,
+            release_time TIMESTAMP,
             timezone VARCHAR(100),
             country VARCHAR(100),
             volatility INT2,
@@ -88,7 +88,7 @@ def save_to_redshift(parquet_paths):
     print('2. 임시 적재 테이블 (`s3_import_events_table`)이 없으면 생성')
     create_data_table_query = """
         CREATE TABLE IF NOT EXISTS raw_data.s3_import_events_table (
-            time TIMESTAMP,
+            release_time TIMESTAMP,
             timezone VARCHAR(100),
             country VARCHAR(100),
             volatility INT2,
@@ -121,7 +121,7 @@ def save_to_redshift(parquet_paths):
         update_data_query = """
             UPDATE raw_data.financial_events AS o
             SET
-                time = n.time,
+                release_time = n.release_time,
                 timezone = n.timezone,
                 country = n.country,
                 volatility = n.volatility,
