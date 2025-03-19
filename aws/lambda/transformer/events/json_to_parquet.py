@@ -29,14 +29,14 @@ class EventParser:
     def __init__(self, html_content):
         self.soup = BeautifulSoup(html_content, "html.parser")
     
-    def extract_events(self):
+    def extract_events(self, daydelta):
         event_datas = []
         event_rows = self.soup.find_all("tr", class_="js-event-item")
-        tomorrow_date = (datetime.today() + timedelta(days=1)).date()
+        date = (datetime.today() - timedelta(days = daydelta)).date()
 
         for row in event_rows:
             event = {
-                'time': None,
+                'release_time': None,
                 'timezone': 'America/New_York',
                 'country': None,
                 'volatility': None,
@@ -51,7 +51,7 @@ class EventParser:
                 if time_tag:
                     time_str = time_tag.text.strip()
                     event_time = datetime.strptime(time_str, "%H:%M").time()
-                    event['time'] = int(datetime.combine(tomorrow_date, event_time).timestamp() * 1000)
+                    event['release_time'] = int(datetime.combine(date, event_time).timestamp() * 1000)
 
                 country_tag = row.select_one("td.left.flagCur.noWrap span")
                 if country_tag:
@@ -118,13 +118,13 @@ class EventPipeline:
     def get_prefix(self, data_stage, format):
         return f"{data_stage}/EVENTS/year={self.day.year}/month={self.day.strftime('%m')}/day={self.day.strftime('%d')}/event.{format}"
 
-    def run(self):
+    def run(self, daydelta):
         json_prefix = self.get_prefix('RAW', 'json')
         response = self.s3_manager.s3_client.get_object(Bucket=self.s3_manager.bucket_name, Key=json_prefix)
         events = json.loads(response['Body'].read())
         
         parser = EventParser(events['content'])
-        event_data = parser.extract_events()
+        event_data = parser.extract_events(daydelta)
         
         transformer = EventTransformer(event_data)
         parquet_prefix = self.get_prefix('TRANSFORMED', 'parquet')
@@ -135,5 +135,5 @@ def lambda_handler(event, context):
     pipeline = EventPipeline()
     for d in [-1, 0, 1]:
         pipeline.set_day(daydelta=d)
-        pipeline.run()
+        pipeline.run(daydelta=d)
     return {"statusCode": 200, "body": "Processing completed successfully"}
