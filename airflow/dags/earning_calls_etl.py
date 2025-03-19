@@ -7,6 +7,7 @@ from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeF
 # AWS Lambda 설정
 EXTRACT_LAMBDA_FUNCTION_NAME = 'earning_call_scraper'
 TRANSFORM_LAMBDA_FUNCTION_NAME = 'earning_call_transformer'
+LOAD_LAMBDA_FUNCTION_NAME = 'earning_call_loader'
 
 default_args = {
     'start_date': datetime(2025, 3, 14),
@@ -36,6 +37,13 @@ with DAG(dag_id='earning_calls_etl',
         invocation_type = "RequestResponse"  # 동기 실행
     )
 
+    parquet_to_redshift_financial_evnets_task = LambdaInvokeFunctionOperator(
+        task_id = "invoke_loading_data_lambda",
+        function_name= LOAD_LAMBDA_FUNCTION_NAME,
+        aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
+        invocation_type = "RequestResponse"  # 동기 실행
+    )
+
     end = EmptyOperator(task_id='end')
 
-    start >> scarping_earning_calls_task >> json_to_parquet_earning_calls_task >> end
+    start >> scarping_earning_calls_task >> json_to_parquet_earning_calls_task >> parquet_to_redshift_financial_evnets_task >> end
