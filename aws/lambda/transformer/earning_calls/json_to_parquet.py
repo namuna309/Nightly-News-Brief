@@ -18,11 +18,18 @@ class S3Manager:
         response = self.s3_client.get_object(Bucket=self.bucket_name, Key=prefix)
         return json.loads(response['Body'].read())
     
-    def save_to_s3(self, df, prefix):
-        wr.s3.to_parquet(
-            df=df,
-            path=f's3://{self.bucket_name}/{prefix}'
-        )
+    def save_to_s3(self, data, prefix, format):
+        if format == 'parquet':
+            wr.s3.to_parquet(
+                df=data,
+                path=f's3://{self.bucket_name}/{prefix}'
+            )
+        else:
+            self.s3_client.put_object(
+                Body=json.dumps(data),
+                Bucket=self.bucket_name,
+                Key=prefix
+            )
 
 class EarningsParser:
     def __init__(self, html_content):
@@ -49,13 +56,17 @@ class EarningsParser:
     def extract_earnings(self):
         earnings = []
         rows = self.soup.select("#earningsCalendarData tbody tr")[1:]
+        current_year = datetime.now().year
+        current_quarter = (datetime.now().month - 1) // 3 + 1
         for row in rows:
             earning = {
                 'company': {'name': None, 'symbol': None},
                 'country': None,
                 'eps': {'actual': {'value': None, 'unit': None}, 'forecast': {'value': None, 'unit': None}},
                 'revenue': {'actual': {'value': None, 'unit': None}, 'forecast': {'value': None, 'unit': None}},
-                'market cap': {'value': None, 'unit': None},
+                'market_cap': {'value': None, 'unit': None},
+                'year': current_year,
+                'quarter' : current_quarter
             }
             try:
                 earning['country'] = row.select_one("td.flag span").get("title") if row.select_one("td.flag span") else None
@@ -67,7 +78,7 @@ class EarningsParser:
                 earning['eps']['forecast']['value'], earning['eps']['forecast']['unit'] = self.parse_value(td_cells[3].text.strip(), lstrip_chars='/')
                 earning['revenue']['actual']['value'], earning['revenue']['actual']['unit'] = self.parse_value(td_cells[4].text.strip())
                 earning['revenue']['forecast']['value'], earning['revenue']['forecast']['unit'] = self.parse_value(td_cells[5].text.strip(), lstrip_chars='/')
-                earning['market cap']['value'], earning['market cap']['unit'] = self.parse_value(td_cells[6].text.strip())
+                earning['market_cap']['value'], earning['market_cap']['unit'] = self.parse_value(td_cells[6].text.strip())
                 
                 earnings.append(earning)
             except Exception as e:
@@ -78,10 +89,43 @@ class EarningsParser:
 class EarningsTransformer:
     def __init__(self, earnings_data):
         self.df = pd.DataFrame(earnings_data)
+
+    def convert_OLAP_df(self):
+        # OLAP 분석용 테이블 변환
+        # 현재 연도와 분기 계산
+        df_olap = pd.DataFrame([
+            {
+                "company_name": row["company"]["name"],
+                "symbol": row["company"]["symbol"],
+                "country": row["country"],
+                "year": row['year'],
+                "quarter": row['quarter'],
+                "eps_actual_value": row["eps"]["actual"]["value"],
+                "eps_actual_unit": row["eps"]["actual"]["unit"],
+                "eps_forecast_value": row["eps"]["forecast"]["value"],
+                "eps_forecast_unit": row["eps"]["forecast"]["unit"],
+                "revenue_actual_value": row["revenue"]["actual"]["value"],
+                "revenue_actual_unit": row["revenue"]["actual"]["unit"],
+                "revenue_forecast_value": row["revenue"]["forecast"]["value"],
+                "revenue_forecast_unit": row["revenue"]["forecast"]["unit"],
+                "market_cap_value": row["market_cap"]["value"],
+                "market_cap_unit": row["market_cap"]["unit"]
+            }
+            for _, row in self.df.iterrows()
+        ])
+        return df_olap
     
-    def save_as_parquet(self, s3_manager, prefix):
-        s3_manager.save_to_s3(self.df, prefix)
-        print(f"Parquet 파일 저장 완료: {prefix}")
+    def convert_OLTP_json(self, earnings_data):
+        json_oltp = {'data': earnings_data}
+        return json_oltp
+    
+
+    def save_data(self, s3_manager, data, prefix, format):
+        if format == 'parqeut':
+            s3_manager.save_to_s3(data, prefix, format)
+        else:
+            s3_manager.save_to_s3(data, prefix, format)
+        print(f"{format} 파일 저장 완료: {prefix}")
 
 class EarningsPipeline:
     def __init__(self):
@@ -93,16 +137,24 @@ class EarningsPipeline:
     
     def get_prefix(self, data_stage, format):
         return f"{data_stage}/EARNING_CALLS/year={self.day.year}/month={self.day.strftime('%m')}/day={self.day.strftime('%d')}/earning.{format}"
-    
+        
     def run(self):
-        json_prefix = self.get_prefix('RAW', 'json')
-        events = self.s3_manager.get_object(json_prefix)
+        raw_prefix = self.get_prefix('RAW', 'json')
+        events = self.s3_manager.get_object(raw_prefix)
         parser = EarningsParser(events['content'])
         earnings_data = parser.extract_earnings()
         
         transformer = EarningsTransformer(earnings_data)
+
+        oltp_json = transformer.convert_OLTP_json(earnings_data)
+        json_prefix = self.get_prefix('TRANSFORMED', 'json')
+        transformer.save_data(s3_manager=self.s3_manager, data=oltp_json, prefix=json_prefix, format='json')
+
+        olap_df = transformer.convert_OLAP_df()
         parquet_prefix = self.get_prefix('TRANSFORMED', 'parquet')
-        transformer.save_as_parquet(self.s3_manager, parquet_prefix)
+        transformer.save_data(s3_manager=self.s3_manager, data=olap_df, prefix=parquet_prefix, format='parquet')
+
+
 
 def lambda_handler(event, context):
     pipeline = EarningsPipeline()
