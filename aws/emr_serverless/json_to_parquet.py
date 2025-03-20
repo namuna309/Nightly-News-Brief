@@ -5,9 +5,7 @@ from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 from pyspark.sql import SparkSession, functions as F
 import concurrent.futures
-from urllib.parse import unquote
 import boto3
-import psycopg2
 
 # 환경 변수 설정
 json_args = sys.argv[1]  
@@ -16,12 +14,6 @@ args = json.loads(json_args)
 # 값 추출
 S3_REGION = args["S3_REGION"]
 BUCKET_NAME = args["BUCKET_NAME"]
-REDSHIFT_HOST = args['REDSHIFT_HOST']
-REDSHIFT_DB = args['REDSHIFT_DB']
-REDSHIFT_USER = args['REDSHIFT_USER']
-REDSHIFT_PW = args['REDSHIFT_PW']
-REDSHIFT_PORT = args['REDSHIFT_PORT']
-REDSHIFT_IAM_ROLE = args['REDSHIFT_IAM_ROLE']
 
 s3_client = boto3.client(  # S3 클라이언트 생성
     service_name='s3',
@@ -151,92 +143,6 @@ def save_to_s3(df, theme):
     df.write.option('header', 'true').mode('overwrite').parquet(f's3a://{BUCKET_NAME}/{prefix}')
     print(f"Parquet 저장 완료: f's3a://{BUCKET_NAME}/{prefix}'")
 
-def save_to_redshift(file_path):
-    """
-    S3의 Parquet 데이터를 Redshift의 financial_articles 테이블에 안전하게 Append하는 함수.
-    중복 제거 후, 임시 테이블을 활용하여 데이터 정합성을 유지하면서 적재함.
-    """
-    # Redshift 연결
-    conn = psycopg2.connect(
-        dbname=REDSHIFT_DB,
-        user=REDSHIFT_USER,
-        password=REDSHIFT_PW,
-        host=REDSHIFT_HOST,
-        port=REDSHIFT_PORT
-    )
-    cur = conn.cursor()
-
-    # 1. 메인 테이블 (`financial_articles`)이 없으면 생성
-    create_og_table_query = """
-        CREATE TABLE IF NOT EXISTS raw_data.financial_articles (
-            article_publisher VARCHAR(255),
-            authors VARCHAR(500),
-            date TIMESTAMP,
-            text VARCHAR(65535),
-            theme VARCHAR(100),
-            timezone VARCHAR(100),
-            title VARCHAR(500),
-            url VARCHAR(1000)
-        );
-    """
-    cur.execute(create_og_table_query)
-    conn.commit()
-    
-    # 2. 임시 적재 테이블 (`s3_import_table`)이 없으면 생성
-    create_data_table_query = """
-        CREATE TABLE IF NOT EXISTS raw_data.s3_import_table (
-            article_publisher VARCHAR(255),
-            authors VARCHAR(500),
-            date TIMESTAMP,
-            text VARCHAR(65535),
-            theme VARCHAR(100),
-            timezone VARCHAR(100),
-            title VARCHAR(500),
-            url VARCHAR(1000)
-        );
-    """
-    cur.execute(create_data_table_query)
-    conn.commit()
-
-    for theme in THEMES:
-        folder_path = file_path[theme][0].rsplit("/", 1)[0] + "/"
-        # 3. S3의 Parquet 데이터를 `s3_import_table`에 적재
-        import_data_to_data_table_query = f"""
-            COPY raw_data.s3_import_table
-            FROM 's3://{BUCKET_NAME}/{folder_path}'
-            IAM_ROLE '{REDSHIFT_IAM_ROLE}'
-            FORMAT AS PARQUET;
-        """
-        cur.execute(import_data_to_data_table_query)
-        conn.commit()
-
-        # 4. 중복 제거 후 데이터 Append
-        append_data_query = """
-            INSERT INTO raw_data.financial_articles
-            SELECT DISTINCT * FROM raw_data.s3_import_table
-            WHERE url NOT IN (SELECT url FROM raw_data.financial_articles);
-        """
-        cur.execute(append_data_query)
-        conn.commit()
-
-        # 5. `s3_import_table` 비우기 (성능 최적화)
-        truncate_data_table_query = """
-            TRUNCATE TABLE raw_data.s3_import_table;
-        """
-        cur.execute(truncate_data_table_query)
-        conn.commit()
-
-
-    # 6. 데이터 적재 결과 확인
-    cur.execute("SELECT COUNT(*) FROM raw_data.financial_articles;")
-    count = cur.fetchone()[0]
-    print(f"financial_articles의 총 데이터 개수: {count}")
-
-    # 7. Redshift 연결 종료
-    cur.close()
-    conn.close()
-    print("Redshift 연결 종료")
-
 def transform_to_parquet(url_per_themes):
     """테마별 JSON 파일을 처리 후 리스트로 저장 (병렬 처리)"""
     for theme, file_paths in url_per_themes.items():
@@ -263,7 +169,4 @@ def transform_to_parquet(url_per_themes):
 if __name__ == "__main__":
     file_paths = load_files('RAW', 'json')
     transform_to_parquet(file_paths)
-    print('데이터 적재 시작')
-    parquet_paths = load_files('TRANSFORMED', 'parquet')
-    save_to_redshift(parquet_paths)
     spark.stop()  # SparkSession 종료
