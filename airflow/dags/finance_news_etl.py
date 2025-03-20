@@ -8,7 +8,8 @@ from airflow.models import Variable
 import pendulum
 
 # AWS Lambda 설정
-LAMBDA_FUNCTION_NAME = "article_scraper"
+EXTRACT_LAMBDA_FUNCTION_NAME = "article_scraper"
+LOAD_LAMBDA_FUNCTION_NAME = "article_loader"
 
 # 크롤링할 URL 목록
 THEME_URLS = {
@@ -59,7 +60,7 @@ with DAG('finance_news_etl', default_args=default_args, schedule_interval='@hour
     for theme, url in THEME_URLS.items():
         invoke_lambda_function = LambdaInvokeFunctionOperator(
             task_id = f"invoke_lambda_{theme}",
-            function_name = LAMBDA_FUNCTION_NAME,
+            function_name = EXTRACT_LAMBDA_FUNCTION_NAME,
             payload = json.dumps({"theme": theme, "url": url}),
             aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
             invocation_type = "RequestResponse"  # 동기 실행
@@ -98,14 +99,22 @@ with DAG('finance_news_etl', default_args=default_args, schedule_interval='@hour
         force_stop = False,
     )
 
+    parquet_to_redshift_financial_articles_task = LambdaInvokeFunctionOperator(
+        task_id = "invoke_loading_data_lambda",
+        function_name= LOAD_LAMBDA_FUNCTION_NAME,
+        aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
+        invocation_type = "RequestResponse"  # 동기 실행
+    )
+
     # 건너뛰기용 더미 태스크
     skip_emr = EmptyOperator(task_id="skip_emr")
 
-    next_task = EmptyOperator(task_id="next_task")
+    end = EmptyOperator(task_id='end')
+
 
 
 
     # DAG 실행 순서 정의
     check_scraping_time_branch >> lambda_tasks >> check_transforming_time_branch
     check_transforming_time_branch >> [emr_serverless_task, skip_emr]
-    emr_serverless_task >> stop_emr_serverless_task >> next_task
+    emr_serverless_task >> stop_emr_serverless_task >> parquet_to_redshift_financial_articles_task >> end
