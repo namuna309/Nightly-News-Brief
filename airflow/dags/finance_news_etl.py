@@ -9,7 +9,8 @@ import pendulum
 
 # AWS Lambda 설정
 EXTRACT_LAMBDA_FUNCTION_NAME = "article_scraper"
-LOAD_LAMBDA_FUNCTION_NAME = "article_loader"
+LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME = "article_loader"
+LOAD_TO_RDS_LAMBDA_FUNCTION_NAME = "article_loader_to_rds"
 
 # 크롤링할 URL 목록
 THEME_URLS = {
@@ -100,8 +101,15 @@ with DAG('finance_news_etl', default_args=default_args, schedule_interval='@hour
     )
 
     parquet_to_redshift_financial_articles_task = LambdaInvokeFunctionOperator(
-        task_id = "invoke_loading_data_lambda",
-        function_name= LOAD_LAMBDA_FUNCTION_NAME,
+        task_id = "invoke_loading_data_to_redshift_lambda",
+        function_name= LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME,
+        aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
+        invocation_type = "RequestResponse"  # 동기 실행
+    )
+
+    parquet_to_rds_financial_articles_task = LambdaInvokeFunctionOperator(
+        task_id = "invoke_loading_data_to_rds_lambda",
+        function_name= LOAD_TO_RDS_LAMBDA_FUNCTION_NAME,
         aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
         invocation_type = "RequestResponse"  # 동기 실행
     )
@@ -117,4 +125,4 @@ with DAG('finance_news_etl', default_args=default_args, schedule_interval='@hour
     # DAG 실행 순서 정의
     check_scraping_time_branch >> lambda_tasks >> check_transforming_time_branch
     check_transforming_time_branch >> [emr_serverless_task, skip_emr]
-    emr_serverless_task >> stop_emr_serverless_task >> parquet_to_redshift_financial_articles_task >> end
+    emr_serverless_task >> stop_emr_serverless_task >> [parquet_to_redshift_financial_articles_task, parquet_to_rds_financial_articles_task] >> end
