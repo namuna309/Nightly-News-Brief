@@ -117,7 +117,7 @@ def save_to_rds(parquet_paths):
             update_data_query = """
                 UPDATE raw_data.financial_events AS o
                 JOIN raw_data.s3_import_events_table AS n
-                ON o.title = n.title
+                ON o.title = n.title AND o.release_time = n.release_time
                 SET 
                     o.release_time = n.release_time,
                     o.timezone = n.timezone,

@@ -131,7 +131,7 @@ def save_to_redshift(parquet_paths):
                 previous = n.previous,
                 unit = n.unit
             FROM raw_data.s3_import_events_table AS n
-            WHERE o.title = n.title
+            WHERE o.title = n.title AND o.release_time = n.release_time
         """
         cur.execute(update_data_query)
         conn.commit()
