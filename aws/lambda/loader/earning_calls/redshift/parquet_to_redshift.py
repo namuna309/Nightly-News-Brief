@@ -1,6 +1,9 @@
 import os
 import json
 from datetime import datetime, timedelta
+import pandas as pd
+import pyarrow.parquet as pq
+from io import BytesIO
 from zoneinfo import ZoneInfo
 from urllib.parse import unquote
 import boto3
@@ -22,6 +25,18 @@ s3_client = boto3.client(  # S3 클라이언트 생성
     service_name='s3',
     region_name=S3_REGION
 )
+
+def load_parquet_data(prefix):
+    file_objects = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)['Contents']
+    dfs = []
+    for file_object in file_objects:
+        file_key = file_object['Key']
+        file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=file_key)
+        parquet_file = pq.ParquetFile(BytesIO(file_obj['Body'].read()))
+        df = parquet_file.read().to_pandas()
+        dfs.append(df)
+    return pd.concat(dfs)
+
 
 def set_day(daydelta):
     today = datetime.now(ZoneInfo("America/New_York")).date()
@@ -118,8 +133,10 @@ def save_to_redshift(parquet_paths):
     conn.commit()
 
     for parquet_path in parquet_paths:
+        df = load_parquet_data(parquet_path)
+        if df.empty:
+            continue
         folder_path = parquet_path.rsplit("/", 1)[0] + "/"
-
          # 3. S3에서 Parquet 데이터를 `s3_import_earning_calls_table`에 적재
         print('3. S3의 Parquet 데이터를 `s3_import_earning_calls_table`에 적재')
         print(f"s3://{BUCKET_NAME}/{folder_path}")
