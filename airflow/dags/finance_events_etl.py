@@ -8,7 +8,7 @@ from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeF
 EXTRACT_LAMBDA_FUNCTION_NAME = 'event_scraper'
 TRANSFORM_LAMBDA_FUNCTION_NAME = 'event_transformer'
 LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME = 'event_loader'
-LOAD_TO_RDS_LAMBDA_FUNCTION_NAME = "article_loader_to_rds"
+LOAD_TO_RDS_LAMBDA_FUNCTION_NAME = "event_loader_to_rds"
 
 default_args = {
     'start_date': datetime(2025, 3, 14),
