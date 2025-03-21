@@ -145,7 +145,7 @@ def save_to_redshift(parquet_paths):
             WHERE NOT EXISTS (
                 SELECT 1 
                 FROM raw_data.financial_events f
-                WHERE s.title = f.title AND s.previous = f.previous
+                WHERE s.title = f.title AND s.release_time = f.release_time
             );
         """
         cur.execute(append_data_query)
