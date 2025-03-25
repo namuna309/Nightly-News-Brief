@@ -11,8 +11,10 @@ LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME = 'event_loader'
 LOAD_TO_RDS_LAMBDA_FUNCTION_NAME = "event_loader_to_rds"
 
 default_args = {
-    'start_date': datetime(2025, 3, 14),
-    'catchup': False
+    'start_date': datetime(2025, 3, 25),
+    'catchup': False,
+    'retries': 4,
+    'retry_delay': timedelta(minutes=3)
 }
 
 with DAG(dag_id='finance_events_etl',
@@ -47,7 +49,7 @@ with DAG(dag_id='finance_events_etl',
 
     parquet_to_rds_financial_evnets_task = LambdaInvokeFunctionOperator(
         task_id = "invoke_loading_data_to_rds_lambda",
-        function_name= LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME,
+        function_name= LOAD_TO_RDS_LAMBDA_FUNCTION_NAME,
         aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
         invocation_type = "RequestResponse"  # 동기 실행
     )

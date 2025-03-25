@@ -12,8 +12,10 @@ LOAD_TO_RDS_LAMBDA_FUNCTION_NAME = "earning_call_loader_to_rds"
 
 
 default_args = {
-    'start_date': datetime(2025, 3, 14),
-    'catchup': False
+    'start_date': datetime(2025, 3, 25),
+    'catchup': False,
+    'retries': 4,
+    'retry_delay': timedelta(minutes=3)
 }
 
 with DAG(dag_id='earning_calls_etl',

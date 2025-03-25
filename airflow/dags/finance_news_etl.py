@@ -3,7 +3,7 @@ from airflow.operators.python import BranchPythonOperator
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
 from airflow.providers.amazon.aws.operators.emr import EmrServerlessStartJobOperator, EmrServerlessStopApplicationOperator
 from airflow.operators.empty import EmptyOperator
-from datetime import datetime
+from datetime import datetime, timedelta 
 from airflow.models import Variable
 import pendulum
 
@@ -25,8 +25,10 @@ THEME_URLS = {
 }
 
 default_args = {
-    'start_date': datetime(2025, 3, 13),
-    'catchup': False
+    'start_date': datetime(2025, 3, 25),
+    'catchup': False,
+    'retries': 4,
+    'retry_delay': timedelta(minutes=3)
 }
 
 # 시간 조건 체크 함수
