@@ -3,6 +3,8 @@ from airflow.decorators import task
 from airflow.operators.empty import EmptyOperator
 from datetime import datetime, timedelta 
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
+from zoneinfo import ZoneInfo
+import pendulum
 
 # AWS Lambda 설정
 EXTRACT_LAMBDA_FUNCTION_NAME = 'event_scraper'
@@ -11,10 +13,9 @@ LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME = 'event_loader'
 LOAD_TO_RDS_LAMBDA_FUNCTION_NAME = "event_loader_to_rds"
 
 default_args = {
-    'start_date': datetime(2025, 3, 25),
+    'start_date': datetime(2025, 3, 25, tzinfo=pendulum.timezone("Asia/Seoul")),
     'catchup': False,
     'retries': 4,
-    'retry_delay': timedelta(minutes=3)
 }
 
 with DAG(dag_id='finance_events_etl',
