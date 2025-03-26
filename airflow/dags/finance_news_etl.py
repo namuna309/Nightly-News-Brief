@@ -25,7 +25,7 @@ THEME_URLS = {
 }
 
 default_args = {
-    'start_date': datetime(2025, 3, 25),
+    'start_date': datetime(2025, 3, 25, tzinfo=pendulum.timezone("Asia/Seoul")),
     'catchup': False,
     'retries': 4,
     'retry_delay': timedelta(minutes=3)
