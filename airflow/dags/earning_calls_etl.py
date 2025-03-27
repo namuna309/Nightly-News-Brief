@@ -3,15 +3,21 @@ from airflow.decorators import task
 from airflow.operators.empty import EmptyOperator
 from datetime import datetime, timedelta 
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
+import pendulum
+
 
 # AWS Lambda 설정
 EXTRACT_LAMBDA_FUNCTION_NAME = 'earning_call_scraper'
 TRANSFORM_LAMBDA_FUNCTION_NAME = 'earning_call_transformer'
-LOAD_LAMBDA_FUNCTION_NAME = 'earning_call_loader'
+LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME = 'earning_call_loader'
+LOAD_TO_RDS_LAMBDA_FUNCTION_NAME = "earning_call_loader_to_rds"
+
 
 default_args = {
-    'start_date': datetime(2025, 3, 14),
-    'catchup': False
+    'start_date': datetime(2025, 3, 25, tzinfo=pendulum.timezone("Asia/Seoul")),
+    'catchup': False,
+    'retries': 4,
+    'retry_delay': timedelta(minutes=3)
 }
 
 with DAG(dag_id='earning_calls_etl',
@@ -30,7 +36,7 @@ with DAG(dag_id='earning_calls_etl',
             invocation_type = "RequestResponse"  # 동기 실행
         )
     
-    json_to_parquet_earning_calls_task = LambdaInvokeFunctionOperator(
+    transforming_earning_calls_task = LambdaInvokeFunctionOperator(
         task_id = f"invoke_transforming_data_lambda",
         function_name = TRANSFORM_LAMBDA_FUNCTION_NAME,
         aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
@@ -39,11 +45,19 @@ with DAG(dag_id='earning_calls_etl',
 
     parquet_to_redshift_financial_evnets_task = LambdaInvokeFunctionOperator(
         task_id = "invoke_loading_data_lambda",
-        function_name= LOAD_LAMBDA_FUNCTION_NAME,
+        function_name= LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME,
+        aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
+        invocation_type = "RequestResponse"  # 동기 실행
+    )
+
+    oltp_json_to_rds_financial_evnets_task = LambdaInvokeFunctionOperator(
+        task_id = "invoke_loading_data_to_rds_lambda",
+        function_name= LOAD_TO_RDS_LAMBDA_FUNCTION_NAME,
         aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
         invocation_type = "RequestResponse"  # 동기 실행
     )
 
     end = EmptyOperator(task_id='end')
 
-    start >> scarping_earning_calls_task >> json_to_parquet_earning_calls_task >> parquet_to_redshift_financial_evnets_task >> end
+    start >> scarping_earning_calls_task >> transforming_earning_calls_task
+    transforming_earning_calls_task >> [parquet_to_redshift_financial_evnets_task, oltp_json_to_rds_financial_evnets_task] >> end

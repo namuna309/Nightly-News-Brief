@@ -1,5 +1,4 @@
 import os
-import json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from urllib.parse import unquote
@@ -8,8 +7,9 @@ import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
-
-
+# 환경 변수 설정
+AWS_ACCESS_KEY = unquote(os.environ.get('AWS_ACCESS_KEY'))  # AWS 액세스 키 로드
+AWS_SECRET_KEY = unquote(os.environ.get('AWS_SECRET_KEY'))  # AWS 시크릿 키 로드
 S3_REGION = unquote(os.environ.get('S3_REGION'))
 BUCKET_NAME = unquote(os.environ.get('BUCKET_NAME')) 
 REDSHIFT_HOST = unquote(os.environ.get('REDSHIFT_HOST'))
@@ -21,6 +21,8 @@ REDSHIFT_IAM_ROLE = unquote(os.environ.get('REDSHIFT_IAM_ROLE'))
 
 s3_client = boto3.client(  # S3 클라이언트 생성
     service_name='s3',
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY,
     region_name=S3_REGION
 )
 
@@ -70,7 +72,7 @@ def save_to_redshift(parquet_paths):
     print('1. 메인 테이블 (`financial_events`)이 없으면 생성')
     create_og_table_query = """
         CREATE TABLE IF NOT EXISTS raw_data.financial_events (
-            release_time TIMESTAMP,
+            time TIMESTAMP,
             timezone VARCHAR(100),
             country VARCHAR(100),
             volatility INT2,
@@ -88,7 +90,7 @@ def save_to_redshift(parquet_paths):
     print('2. 임시 적재 테이블 (`s3_import_events_table`)이 없으면 생성')
     create_data_table_query = """
         CREATE TABLE IF NOT EXISTS raw_data.s3_import_events_table (
-            release_time TIMESTAMP,
+            time TIMESTAMP,
             timezone VARCHAR(100),
             country VARCHAR(100),
             volatility INT2,
@@ -121,7 +123,7 @@ def save_to_redshift(parquet_paths):
         update_data_query = """
             UPDATE raw_data.financial_events AS o
             SET
-                release_time = n.release_time,
+                time = n.time,
                 timezone = n.timezone,
                 country = n.country,
                 volatility = n.volatility,
@@ -131,7 +133,7 @@ def save_to_redshift(parquet_paths):
                 previous = n.previous,
                 unit = n.unit
             FROM raw_data.s3_import_events_table AS n
-            WHERE o.title = n.title
+            WHERE o.title = n.title AND o.release_time = n.release_time
         """
         cur.execute(update_data_query)
         conn.commit()
@@ -145,7 +147,7 @@ def save_to_redshift(parquet_paths):
             WHERE NOT EXISTS (
                 SELECT 1 
                 FROM raw_data.financial_events f
-                WHERE s.title = f.title AND s.previous = f.previous
+                WHERE s.title = f.title AND s.release_time = f.release_time
             );
         """
         cur.execute(append_data_query)
@@ -172,11 +174,6 @@ def save_to_redshift(parquet_paths):
     conn.close()
     print("Redshift 연결 종료")
 
-def lambda_handler(event, context):
+if __name__ == "__main__":
     parquet_paths = load_files()
     save_to_redshift(parquet_paths)
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Hello from Lambda!')
-    }

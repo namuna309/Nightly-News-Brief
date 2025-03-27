@@ -5,7 +5,7 @@ FROM public.ecr.aws/lambda/python:3.11
 RUN yum install -y gcc postgresql-devel
 
 RUN yum install -y python3-pip && \
-    pip3 install psycopg2-binary python-dotenv
+    pip3 install psycopg2-binary python-dotenv pandas pyarrow
 
 COPY *.py /var/task/
 COPY .env /var/task/
