@@ -22,7 +22,7 @@ RDS_PASSWORD = unquote(os.environ.get('RDS_PASSWORD'))
 QUERY = f"""
 SELECT *
 FROM {DB_NAME}.{EVENT_TABLE_NAME} AS f
-WHERE DATE(f.release_time) = CURDATE()
+WHERE DATE(f.release_time) = CURDATE() -INTERVAL 1 DAY
 ORDER BY f.release_time;
 """
 
@@ -48,59 +48,61 @@ def list_to_txt(lst):
     curr_hour = timestamp.hour
     new_str = ''
     for i, l in enumerate(lst):
-        release_time, timezone, country, volatility, title, actual, forecast, previous, unit = l[0], l[1], l[2], l[3], l[4], [5], l[6], l[7], l[8]
+        release_time, timezone, country, volatility, title, actual, forecast, previous, unit = l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], l[8]
         unit = unit if unit else ''
-        forecast = f"예상: {forecast}{unit}" if forecast else ""
-        previous = f"이전: {previous}{unit}" if previous else ""
+        forecast_str = f"예상: {forecast}{unit}" if forecast else ""
+        previous_str = f"이전: {previous}{unit}" if previous else ""
         
         release_time_ny = release_time.replace(tzinfo=ZoneInfo(timezone))
         release_time_seoul = release_time_ny.astimezone(ZoneInfo("Asia/Seoul"))
         release_time = release_time_seoul.strftime("%H:%M")
 
+        stars = '★' * volatility
         if curr_hour > 12:
-            stars = '★' * volatility
+            
             if "Speaks" in title:
                 economic_values_str = ""  
             else:
                 if forecast and previous:
-                    economic_values_str = f"({forecast}, {previous})"
+                    economic_values_str = f"({forecast_str}, {previous_str})"
                 elif forecast:
-                    economic_values_str = f"({forecast})"
+                    economic_values_str = f"({forecast_str})"
                 elif previous:
-                    economic_values_str = f"({previous})"
+                    economic_values_str = f"({previous_str})"
                 else:
                     economic_values_str = ""
 
-            new_str += f'{release_time} - {title} {stars} {economic_values_str}\n'
-        elif curr_hour < 12 and actual != 0:
+            new_str += f'{release_time} - {title} {stars}\n{economic_values_str}\n\n'
+        elif curr_hour < 12 and actual != None:
             # 실적과 예상 비교
-            if actual > forecast:
-                status_vs_forecast = "▲"
-            elif actual < forecast:
-                status_vs_forecast = "▼"
-            else:
-                status_vs_forecast = "="
-
-            if actual > previous:
-                status_vs_previous = "▲"
-            elif actual < previous:
-                status_vs_previous = "▼"
-            else:
-                status_vs_previous = "="
+            if actual and forecast:
+                if actual > forecast:
+                    status_vs_forecast = "▲"
+                elif actual < forecast:
+                    status_vs_forecast = "▼"
+                else:
+                    status_vs_forecast = "="
+            if actual and previous:
+                if actual > previous:
+                    status_vs_previous = "▲"
+                elif actual < previous:
+                    status_vs_previous = "▼"
+                else:
+                    status_vs_previous = "="
             
             if "Speaks" in title:
                 economic_values_str = ""  
             else:
                 if forecast and previous:
-                    economic_values_str = f" {actual}{unit} → 예상({forecast}{unit}): {status_vs_forecast}, 이전({previous}{unit}): {status_vs_previous}"
+                    economic_values_str = f"실제: {actual}{unit} → 예상({forecast}{unit}): {status_vs_forecast}, 이전({previous}{unit}): {status_vs_previous}"
                 elif forecast:
-                    economic_values_str = f" {actual}{unit} → 예상({forecast}{unit}): {status_vs_forecast}"
+                    economic_values_str = f"실제: {actual}{unit} → 예상({forecast}{unit}): {status_vs_forecast}"
                 elif previous:
-                    economic_values_str = f" {actual}{unit} → 이전({previous}{unit}): {status_vs_previous}"
+                    economic_values_str = f"실제: {actual}{unit} → 이전({previous}{unit}): {status_vs_previous}"
                 else:
-                    economic_values_str = f" {actual}{unit}"
+                    economic_values_str = f"실제: {actual}{unit}"
             
-            nnew_str += f'{release_time} - {title} {stars} {economic_values_str}\n'
+            new_str += f'{release_time} - {title} {stars}\n{economic_values_str}\n\n'
 
     print(f"변환된 텍스트 길이: {len(new_str)}자")
     return new_str

@@ -26,7 +26,7 @@ SELECT DISTINCT c.name, c.symbol, p.year, p.quarter, e.revenue_forecast, e.reven
 FROM {DB_NAME}.{EARNING_TABLE_NAME} AS e
 JOIN {DB_NAME}.{COMPANY_TABLE_NAME} AS c ON e.company_id = c.company_id
 JOIN {DB_NAME}.{PERIOD_TABLE_NAME} AS p ON e.period_id = p.period_id
-WHERE DATE(e.call_date) = CURDATE()
+WHERE DATE(e.call_date) = CURDATE() - INTERVAL 1 DAY
 AND (e.revenue_actual != 0 AND e.revenue_forecast != 0)
 ORDER BY e.call_date;
 """
@@ -50,10 +50,11 @@ def fetch_earnings_from_rds(conn_str):
 def list_to_txt(lst):
     print("실적 리스트를 텍스트로 변환 중...")
     new_str = ''
+    units = {'K': 1000, 'M': 1000000, 'B': 1000000000}
     for i, l in enumerate(lst):
         # 실적과 예상 비교
-        actual_earnings = float(l[6])  # 실제 실적
-        forecast_earnings = float(l[4])  # 예상 실적
+        actual_earnings = float(l[6]) * units[l[7]]  # 실제 실적
+        forecast_earnings = float(l[4]) * units[l[5]]  # 예상 실적
 
         if actual_earnings > forecast_earnings:
             performance_status = "▲"
@@ -62,7 +63,7 @@ def list_to_txt(lst):
         else:
             performance_status = "="
         
-        new_str += f'{l[0]}({l[1]}): {actual_earnings} {l[7]} / {forecast_earnings} {l[5]} → {performance_status}\n'
+        new_str += f'{l[0]}({l[1]})\n실제: {l[6]}{l[7]} / 기대: {l[4]}{l[5]} → {performance_status}\n\n'
 
     print(f"변환된 텍스트 길이: {len(new_str)}자")
     return new_str
