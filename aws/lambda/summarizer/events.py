@@ -23,7 +23,7 @@ QUERY = f"""
 SELECT *
 FROM {DB_NAME}.{EVENT_TABLE_NAME} AS f
 WHERE DATE(f.release_time) = CURDATE()
-ORDER BY f.release_time AND f.title;
+ORDER BY f.release_time;
 """
 
 today = datetime.now(ZoneInfo("Asia/Seoul")).date()

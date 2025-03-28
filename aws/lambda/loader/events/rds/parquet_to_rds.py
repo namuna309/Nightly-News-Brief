@@ -104,47 +104,47 @@ def save_to_rds(parquet_paths):
         """
         conn.execute(text(create_data_table_query))
 
-    for parquet_path in parquet_paths:
-        print(parquet_path)
-        df = load_parquet_data(parquet_path)
+    for i in range(len(parquet_paths)):
+        print(parquet_paths[i])
+        df = load_parquet_data(parquet_paths[i])
         df.drop_duplicates()
         df["release_time"] = pd.to_datetime(df["release_time"], unit="ms")  # Unix Timestamp 변환
         # DataFrame을 MySQL RDS에 저장
+        with engine.begin() as conn:
+            cleaning_import_tabe = "TRUNCATE TABLE raw_data.s3_import_events_table"
+            conn.execute(text(cleaning_import_tabe))
+            conn.commit()
         df.to_sql(name="s3_import_events_table", con=engine, schema="raw_data", if_exists="append", index=False)
-
-        with engine.begin() as conn:
-            print('3. 기존 데이터 Update')
-            update_data_query = """
-                UPDATE raw_data.financial_events AS o
-                JOIN raw_data.s3_import_events_table AS n
-                ON o.title = n.title AND o.release_time = n.release_time
-                SET 
-                    o.release_time = n.release_time,
-                    o.timezone = n.timezone,
-                    o.country = n.country,
-                    o.volatility = n.volatility,
-                    o.actual = n.actual,
-                    o.forecast = n.forecast,
-                    o.previous = n.previous,
-                    o.unit = n.unit;
-            """
-            conn.execute(text(update_data_query))
-            conn.commit()
-
-        with engine.begin() as conn:
-            print('4. 중복 제거 후 데이터 Append')
-            append_data_query = """
-                INSERT INTO raw_data.financial_events
-                SELECT DISTINCT *
-                FROM raw_data.s3_import_events_table s
-                WHERE NOT EXISTS (
-                    SELECT 1 
-                    FROM raw_data.financial_events f
-                    WHERE s.title = f.title AND s.release_time = f.release_time
-                );
-            """
-            conn.execute(text(append_data_query))
-            conn.commit()
+        
+        if i != 0:
+            with engine.begin() as conn:
+                print('3 - 1. 기존 데이터 Update')
+                update_data_query = """
+                    UPDATE raw_data.financial_events AS o
+                    JOIN raw_data.s3_import_events_table AS n
+                    ON o.title = n.title AND o.release_time = n.release_time
+                    SET 
+                        o.release_time = n.release_time,
+                        o.timezone = n.timezone,
+                        o.country = n.country,
+                        o.volatility = n.volatility,
+                        o.actual = n.actual,
+                        o.forecast = n.forecast,
+                        o.previous = n.previous,
+                        o.unit = n.unit;
+                """
+                conn.execute(text(update_data_query))
+                conn.commit()
+        else:
+            with engine.begin() as conn:
+                print('3 - 2. 데이터 Append')
+                append_data_query = """
+                    INSERT INTO raw_data.financial_events
+                    SELECT *
+                    FROM raw_data.s3_import_events_table s
+                """
+                conn.execute(text(append_data_query))
+                conn.commit()
     
     with engine.connect() as conn:
         total_financial_events = "SELECT COUNT(*) FROM raw_data.financial_events;"

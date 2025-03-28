@@ -70,7 +70,7 @@ def save_to_redshift(parquet_paths):
     print('1. 메인 테이블 (`financial_events`)이 없으면 생성')
     create_og_table_query = """
         CREATE TABLE IF NOT EXISTS raw_data.financial_events (
-            release_time TIMESTAMP,
+            time TIMESTAMP,
             timezone VARCHAR(100),
             country VARCHAR(100),
             volatility INT2,
@@ -88,7 +88,7 @@ def save_to_redshift(parquet_paths):
     print('2. 임시 적재 테이블 (`s3_import_events_table`)이 없으면 생성')
     create_data_table_query = """
         CREATE TABLE IF NOT EXISTS raw_data.s3_import_events_table (
-            release_time TIMESTAMP,
+            time TIMESTAMP,
             timezone VARCHAR(100),
             country VARCHAR(100),
             volatility INT2,
@@ -102,9 +102,14 @@ def save_to_redshift(parquet_paths):
     cur.execute(create_data_table_query)
     conn.commit()
 
-    for parquet_path in parquet_paths:
-        folder_path = parquet_path.rsplit("/", 1)[0] + "/"
+    for i in range(len(parquet_paths)):
+        folder_path = parquet_paths[i].rsplit("/", 1)[0] + "/"
         # 3. S3의 Parquet 데이터를 `s3_import_table`에 적재
+        # 임시 테이블 초기화
+        cleaning_import_table = "TRUNCATE TABLE raw_data.s3_import_events_table;"
+        cur.execute(cleaning_import_table)
+        conn.commit()
+
         print('3. S3의 Parquet 데이터를 `s3_import_table`에 적재')
         print(f"s3://{BUCKET_NAME}/{folder_path}")
         import_data_to_data_table_query = f"""
@@ -116,55 +121,47 @@ def save_to_redshift(parquet_paths):
         cur.execute(import_data_to_data_table_query)
         conn.commit()
         
-        # 4. 기존 데이터 Update
-        print('4. 기존 데이터 Update')
-        update_data_query = """
-            UPDATE raw_data.financial_events AS o
-            SET
-                release_time = n.release_time,
-                timezone = n.timezone,
-                country = n.country,
-                volatility = n.volatility,
-                title = n.title,
-                actual = n.actual,
-                forecast = n.forecast,
-                previous = n.previous,
-                unit = n.unit
-            FROM raw_data.s3_import_events_table AS n
-            WHERE o.title = n.title AND o.release_time = n.release_time
-        """
-        cur.execute(update_data_query)
-        conn.commit()
+        if i != 0:
+            print('3 - 1. 기존 데이터 Update')
+            update_data_query = """
+                UPDATE raw_data.financial_events AS o
+                SET 
+                    release_time = n.release_time,
+                    timezone = n.timezone,
+                    country = n.country,
+                    volatility = n.volatility,
+                    actual = n.actual,
+                    forecast = n.forecast,
+                    previous = n.previous,
+                    unit = n.unit
+                FROM raw_data.s3_import_events_table AS n
+                WHERE o.title = n.title 
+                AND o.release_time = n.release_time;
+            """
+            cur.execute(update_data_query)
+            conn.commit()
+        else:
+            print('3 - 2. 데이터 Append')
+            append_data_query = """
+                INSERT INTO raw_data.financial_events (
+                    release_time, timezone, country, volatility, title, 
+                    actual, forecast, previous, unit
+                )
+                SELECT 
+                    release_time, timezone, country, volatility, title, 
+                    actual, forecast, previous, unit
+                FROM raw_data.s3_import_events_table;
+            """
+            cur.execute(append_data_query)
+            conn.commit()
 
-        # 5. 중복 제거 후 데이터 Append
-        print('5. 중복 제거 후 데이터 Append')
-        append_data_query = """
-            INSERT INTO raw_data.financial_events
-            SELECT DISTINCT *
-            FROM raw_data.s3_import_events_table s
-            WHERE NOT EXISTS (
-                SELECT 1 
-                FROM raw_data.financial_events f
-                WHERE s.title = f.title AND s.release_time = f.release_time
-            );
-        """
-        cur.execute(append_data_query)
-        conn.commit()
-
-        # 6. `s3_import_events_table` 비우기
-        print('6. `s3_import_events_table` 비우기')
-        truncate_data_table_query = """
-            TRUNCATE TABLE raw_data.s3_import_events_table;
-        """
-        cur.execute(truncate_data_table_query)
-        conn.commit()
-
-
-    # 7. 데이터 적재 결과 확인
-    print('7. 데이터 적재 결과 확인')
-    cur.execute("SELECT COUNT(*) FROM raw_data.financial_events;")
+    # 총 데이터 개수 확인
+    total_financial_events = "SELECT COUNT(*) FROM raw_data.financial_events;"
+    cur.execute(total_financial_events)
     count = cur.fetchone()[0]
     print(f"financial_events 총 데이터 개수: {count}")
+        
+    print(f"Event Data inserted successfully!")
 
     # 8. Redshift 연결 종료
     print('8. Redshift 연결 종료')
