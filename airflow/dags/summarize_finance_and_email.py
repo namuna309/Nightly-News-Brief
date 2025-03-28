@@ -4,6 +4,8 @@ from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.dates import days_ago
 from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
 from datetime import timedelta
+import pendulum
+
 
 # AWS Lambda 설정
 SUMMARIZE_ARTICLE_LAMBDA_FUNCTION_NAME = 'summarizer_article'
@@ -29,7 +31,7 @@ with DAG(
     default_args=default_args,
     description='Summarize and send after ETLs are complete',
     schedule_interval='0 7,21 * * *',  # 매일 07:00과 21:00에 실행
-    start_date=days_ago(1),
+    start_date=days_ago(1).replace(tzinfo=pendulum.timezone("Asia/Seoul")),
     catchup=False,
 ) as dag:
 
