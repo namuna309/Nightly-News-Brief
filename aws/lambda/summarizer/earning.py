@@ -26,7 +26,7 @@ SELECT DISTINCT c.name, c.symbol, p.year, p.quarter, e.revenue_forecast, e.reven
 FROM {DB_NAME}.{EARNING_TABLE_NAME} AS e
 JOIN {DB_NAME}.{COMPANY_TABLE_NAME} AS c ON e.company_id = c.company_id
 JOIN {DB_NAME}.{PERIOD_TABLE_NAME} AS p ON e.period_id = p.period_id
-WHERE DATE(e.call_date) = CURDATE() - INTERVAL 1 DAY
+WHERE DATE(e.call_date) = CURDATE()
 AND (e.revenue_actual != 0 AND e.revenue_forecast != 0)
 ORDER BY e.call_date;
 """
