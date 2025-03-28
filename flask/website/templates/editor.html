@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>텍스트 작성</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="editor-container">
+        <h2>텍스트 작성</h2>
+        <p><a href="{{ url_for('logout') }}">로그아웃</a></p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="POST" action="{{ url_for('editor_page') }}">
+            <div class="form-group">
+                <label for="text">텍스트 입력:</label>
+                <textarea id="text" name="text" rows="5" required></textarea>
+            </div>
+            <button type="submit">전송</button>
+        </form>
+    </div>
+</body>
+</html>
