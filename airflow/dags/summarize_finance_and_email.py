@@ -39,7 +39,7 @@ with DAG(
     wait_for_earning_calls = ExternalTaskSensor(
         task_id='wait_for_earning_calls_etl',
         external_dag_id='earning_calls_etl',
-        external_task_id='end_task',  # ETL DAG의 마지막 태스크 ID (가정)
+        external_task_ids=['invoke_loading_data_to_redshift_lambda', 'invoke_loading_data_to_rds_lambda'],  # ETL DAG의 마지막 태스크 ID (가정)
         execution_delta=timedelta(minutes=0),  # 동일한 스케줄 시간 기준
         timeout=3600,  # 1시간 타임아웃
         mode='poke',
@@ -49,7 +49,7 @@ with DAG(
     wait_for_finance_events = ExternalTaskSensor(
         task_id='wait_for_finance_events_etl',
         external_dag_id='finance_events_etl',
-        external_task_id='end_task',  # ETL DAG의 마지막 태스크 ID (가정)
+        external_task_ids=['invoke_loading_data_to_redshift_lambda', 'invoke_loading_data_to_rds_lambda'],  # ETL DAG의 마지막 태스크 ID (가정)
         execution_delta=timedelta(minutes=0),
         timeout=3600,
         mode='poke',
@@ -59,7 +59,7 @@ with DAG(
     wait_for_finance_news = ExternalTaskSensor(
         task_id='wait_for_finance_news_etl',
         external_dag_id='finance_news_etl',
-        external_task_id='end_task',  # ETL DAG의 마지막 태스크 ID (가정)
+        external_task_ids=['invoke_loading_data_to_redshift_lambda', 'invoke_loading_data_to_rds_lambda'],  # ETL DAG의 마지막 태스크 ID (가정)
         execution_delta=timedelta(minutes=0),
         timeout=3600,
         mode='poke',

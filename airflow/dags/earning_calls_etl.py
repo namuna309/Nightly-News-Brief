@@ -44,7 +44,7 @@ with DAG(dag_id='earning_calls_etl',
     )
 
     parquet_to_redshift_financial_evnets_task = LambdaInvokeFunctionOperator(
-        task_id = "invoke_loading_data_lambda",
+        task_id = "invoke_loading_data_to_redshift_lambda",
         function_name= LOAD_TO_REDSHIFT_LAMBDA_FUNCTION_NAME,
         aws_conn_id = "aws_conn",  # AWS 연결 ID (Airflow에서 설정 필요)
         invocation_type = "RequestResponse"  # 동기 실행
