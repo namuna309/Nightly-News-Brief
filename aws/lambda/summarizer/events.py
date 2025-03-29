@@ -22,7 +22,7 @@ RDS_PASSWORD = unquote(os.environ.get('RDS_PASSWORD'))
 QUERY = f"""
 SELECT *
 FROM {DB_NAME}.{EVENT_TABLE_NAME} AS f
-WHERE DATE(f.release_time) = CURDATE() -INTERVAL 1 DAY
+WHERE DATE(f.release_time) = CURDATE() AND f.actual IS NOT NULL
 ORDER BY f.release_time;
 """
 
