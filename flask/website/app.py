@@ -5,6 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import boto3
 import json
 from config import Config
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -35,9 +37,8 @@ class Editor(db.Model, UserMixin):
     def is_anonymous(self):
         return False  # 익명 사용자가 아님
 
-# SQS 클라이언트 초기화
-lambda_client = boto3.client(
-    'lambda',
+s3_client = boto3.client(
+    's3',
     aws_access_key_id=app.config['AWS_ACCESS_KEY'],
     aws_secret_access_key=app.config['AWS_SECRET_KEY'],
     region_name=app.config['REGION']  # 예: 'us-east-1'
@@ -46,6 +47,19 @@ lambda_client = boto3.client(
 # 데이터베이스 초기화 (최초 실행 시 테이블 생성)
 with app.app_context():
     db.create_all()
+
+def get_filename_with_date_hour(prefix="articles", format=".txt"):
+    timestamp = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%y%m%d%H")
+    filename = f"{prefix}_{timestamp}{format}"
+    print(f"생성된 파일명: {filename}")
+    return filename
+
+def get_prefix():
+    filename = get_filename_with_date_hour()
+    day = datetime.now(ZoneInfo("Asia/Seoul")).date()
+    prefix = f"FINAL/year={day.year}/month={day.strftime('%m')}/day={day.strftime('%d')}/{filename}"
+    print(f"생성된 S3 prefix: {prefix}")
+    return prefix
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -80,13 +94,14 @@ def editor_page():
         text = request.form['text']
         try:
             # Lambda 함수 호출
-            response = lambda_client.invoke(
-                FunctionName='text_to_sqs',  # Lambda 함수 이름
-                InvocationType='RequestResponse',  # 동기 호출, 'Event'로 변경 가능
-                Payload=json.dumps({'text': text})  # 텍스트를 JSON으로 전달
+            prefix = get_prefix()
+            response = s3_client.put_object(
+                Bucket=app.config['BUCKET_NAME'],
+                Key=prefix,
+                Body=text.encode("utf-8"),
+                ContentType="text/plain"
             )
-            # Lambda 응답 확인 (선택 사항)
-            response_payload = json.loads(response['Payload'].read().decode('utf-8'))
+
             flash(f'Lambda 호출 성공', 'success')
         except Exception as e:
             flash(f'Lambda 호출 실패: {str(e)}', 'error')
