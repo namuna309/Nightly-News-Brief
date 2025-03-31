@@ -36,7 +36,7 @@ def lambda_handler(event, context):
         
         with connection.cursor() as cursor:
             # receiver 테이블에서 이메일 주소 조회
-            cursor.execute(f"SELECT email FROM {DB_NAME}.{TABLE_NAME}")
+            cursor.execute(f"SELECT email_address FROM {DB_NAME}.{TABLE_NAME}")
             emails = [row[0] for row in cursor.fetchall()]
         
         connection.close()

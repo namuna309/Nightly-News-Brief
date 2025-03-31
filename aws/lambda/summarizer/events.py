@@ -19,14 +19,17 @@ RDS_PORT = unquote(os.environ.get('RDS_PORT'))
 RDS_USER = unquote(os.environ.get('RDS_USER'))
 RDS_PASSWORD = unquote(os.environ.get('RDS_PASSWORD'))
 
+
+
+today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+
+cond = '' if today.hour == 7 else 'AND f.actual IS NOT NULL'
 QUERY = f"""
 SELECT *
 FROM {DB_NAME}.{EVENT_TABLE_NAME} AS f
-WHERE DATE(f.release_time) = CURDATE() AND f.actual IS NOT NULL
+WHERE DATE(f.release_time) = CURDATE() {cond}
 ORDER BY f.release_time;
 """
-
-today = datetime.now(ZoneInfo("Asia/Seoul")).date()
 
 def fetch_earnings_from_rds(conn_str):
     print(f"RDS 연결 시도: {conn_str}")
