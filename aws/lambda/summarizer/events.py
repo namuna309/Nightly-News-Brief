@@ -5,9 +5,6 @@ from sqlalchemy import create_engine, text
 from urllib.parse import unquote
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # 환경 변수 로드
 S3_REGION = unquote(os.environ.get('S3_REGION'))
@@ -20,16 +17,17 @@ RDS_USER = unquote(os.environ.get('RDS_USER'))
 RDS_PASSWORD = unquote(os.environ.get('RDS_PASSWORD'))
 
 
-
 today = datetime.now(ZoneInfo("Asia/Seoul")).date()
-
-cond = '' if today.hour == 7 else 'AND f.actual IS NOT NULL'
+curr_hour = datetime.now(ZoneInfo("Asia/Seoul")).hour
+cond = '' if curr_hour == 21 else 'AND f.actual IS NOT NULL'
 QUERY = f"""
-SELECT *
+SELECT DISTINCT *
 FROM {DB_NAME}.{EVENT_TABLE_NAME} AS f
 WHERE DATE(f.release_time) = CURDATE() {cond}
 ORDER BY f.release_time;
 """
+
+today = datetime.now(ZoneInfo("Asia/Seoul")).date()
 
 def fetch_earnings_from_rds(conn_str):
     print(f"RDS 연결 시도: {conn_str}")
@@ -48,7 +46,6 @@ def fetch_earnings_from_rds(conn_str):
 def list_to_txt(lst):
     print("실적 리스트를 텍스트로 변환 중...")
     timestamp = datetime.now(ZoneInfo("Asia/Seoul"))
-    curr_hour = timestamp.hour
     new_str = ''
     for i, l in enumerate(lst):
         release_time, timezone, country, volatility, title, actual, forecast, previous, unit = l[0], l[1], l[2], l[3], l[4], l[5], l[6], l[7], l[8]
@@ -158,6 +155,7 @@ def lambda_handler(event, context):
         'statusCode': 200,
         'body': json.dumps('Earnings summary generation and S3 upload have been completed successfully.')
     }
+
 
 if __name__ == '__main__':
     print(lambda_handler([], []))
