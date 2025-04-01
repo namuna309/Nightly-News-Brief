@@ -50,7 +50,7 @@ def fetch_earnings_from_rds(conn_str):
 def list_to_txt(lst):
     print("실적 리스트를 텍스트로 변환 중...")
     new_str = ''
-    units = {'K': 1000, 'M': 1000000, 'B': 1000000000}
+    units = {'K': 10**3, 'M': 10**6, 'B': 10*9, 'T': 10*12}
     for i, l in enumerate(lst):
         # 실적과 예상 비교
         actual_earnings = float(l[6]) * units[l[7]] if l[7] in units.keys() else float(l[6]) # 실제 실적
