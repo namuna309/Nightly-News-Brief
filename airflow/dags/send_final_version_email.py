@@ -26,7 +26,7 @@ with DAG(
     dag_id='send_final_version_email',
     default_args=default_args,
     description='Send final version brief document email',
-    schedule_interval='0 22 * * *',  # 매일 07:00과 21:00에 실행
+    schedule_interval='0 8,22 * * *',  # 매일 08:00과 22:00에 실행
     start_date=days_ago(1).replace(tzinfo=pendulum.timezone("Asia/Seoul")),
     catchup=False,
 ) as dag:
