@@ -19,8 +19,11 @@
 | 회원 관리 | <img src="https://img.shields.io/badge/google_forms-7248B9?style=for-the-badge&logo=googleforms&logoColor=white"/> <img src="https://img.shields.io/badge/google_sheets-34A853?style=for-the-badge&logo=googlesheets&logoColor=white"/> <img src="https://img.shields.io/badge/google_apps_script-4285F4?style=for-the-badge&logo=googleappsscript&logoColor=white"/> <img src="https://img.shields.io/badge/amazon_lambda-FF9900?style=for-the-badge&logo=awslambda&logoColor=white"/> <img src="https://img.shields.io/badge/amazon_rds-527FFF?style=for-the-badge&logo=amazonrds&logoColor=white"/>|
 <br/>
 <br/>
+
 ## 데이터 파이프라인
+
 ![Image](https://github.com/user-attachments/assets/6a86d53a-39f7-4b30-ab3f-ff0cf8269563)
+
 ### 데이터 수집
 - 데이터 소스
     - 경제 뉴스: Yahoo Finance
@@ -46,9 +49,13 @@
 - 특히 실적 발표 데이터는 구조의 복잡성으로 인해, `OLTP` 에 저장된 JSON 데이터를 기준으로 RDS에 적재합니다.
 <br/>
 <br/>
+
 ## 메일 전송 및 회원 등록
+
 ### 메일 전송
+
 ![Image](https://github.com/user-attachments/assets/1a3f9e64-edef-419c-957a-8bdb42f7fc4a)
+
 1. **요약 파일 생성 (Lambda 실행)**  
    - **RDS에 저장된 데이터를 기반으로** 텍스트 파일(`.txt`)로 변환하여 `S3/SUMMARY`에 저장합니다.
      - **경제 뉴스**: 저장된 뉴스 데이터를 기반으로 **ChatGPT**를 활용해 주요 뉴스 10건으로 요약 후 `.txt` 파일로 저장합니다.
@@ -68,7 +75,9 @@
    - SQS에 등록된 메시지 수만큼 **Lambda가 실행**되어, 각 회원에게 최종본을 전송합니다.
 
 ### 회원 등록
+
 ![Image](https://github.com/user-attachments/assets/f751350c-76d5-401d-aac6-09437d210666)
+
 1. **이메일 입력 (Google Form)**  
    - 사용자가 **Google Form**을 통해 이메일 주소를 입력합니다.
 
@@ -84,4 +93,5 @@
 <br/>
 
 ## 결과물(발송되는 최종본)
+
 ![Image](https://github.com/user-attachments/assets/059c8547-dbb7-4523-a6cb-53183606d7fc)
