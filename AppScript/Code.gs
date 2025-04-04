@@ -1,3 +1,7 @@
+function getEnv(key) {
+  return PropertiesService.getScriptProperties().getProperty(key);
+}
+
 function onFormSubmit(e) {
   var form = FormApp.getActiveForm();
   var sheet = SpreadsheetApp.getActiveSheet();
@@ -5,7 +9,7 @@ function onFormSubmit(e) {
   var row = range.getRow();
 
   // FormResponse에서 응답 ID 가져오기
-  var formId = "1AQNjnYoEX1gI39X9Z04YOiqR2CVBs2XwXnFYiBR-YqU"; // Google Forms URL에서 복사한 ID
+  var formId = getEnv('FORM_ID'); // Google Forms URL에서 복사한 ID
   var form = FormApp.openById(formId);
   var responses = form.getResponses();
   var lastResponse = responses[responses.length - 1]; // 가장 최근 응답
@@ -29,7 +33,7 @@ function onFormSubmit(e) {
     "payload": JSON.stringify(payload)
   };
 
-  var url = "https://fxpc6t9u24.execute-api.ap-northeast-2.amazonaws.com/dev/member/regist";
+  var url = getEnv('REGIST_API');
   UrlFetchApp.fetch(url, options);
 }
 
