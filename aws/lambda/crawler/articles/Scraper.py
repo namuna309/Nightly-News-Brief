@@ -113,36 +113,30 @@ class ChromeDriver:
         최대 max_scrolls 횟수까지 스크롤합니다.
         """
         previous_date_texts = []
-        try:
-            for scroll in range(max_scrolls):
-                time.sleep(wait_time)  # 페이지 로드 대기
-                try:
-                    date_elements = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'publishing')]")
-                    date_texts = [el.get_attribute("textContent").split("•")[-1].strip() for el in date_elements]
-                except Exception as e:
-                    print("XPath 오류 발생:", e)
-                    return
+        for scroll in range(max_scrolls):
+            time.sleep(wait_time)  # 페이지 로드 대기
+            try:
+                date_elements = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'publishing')]")
+                date_texts = [el.get_attribute("textContent").split("•")[-1].strip() for el in date_elements]
+            except Exception as e:
+                print("❌ XPath 오류 발생:", e)
+                return
 
-                # 새로 로드된 날짜 텍스트 확인
-                new_date_texts = date_texts[len(previous_date_texts):]
+            # 새로 로드된 날짜 텍스트 확인
+            new_date_texts = date_texts[len(previous_date_texts):]
 
-                if until == 'yesterday':
-                    # 날짜 정보에 숫자가 없는 경우 (ex. "yesterday" 등) 스크롤 중단
-                    contains_number = any(re.search(r'\d', text) for text in new_date_texts)
-                else:
-                    contains_number = any(re.search(r'(\d+)\s*(minutes?)', text) for text in new_date_texts)
-                if not contains_number:
-                    return
+            # 날짜 정보에 숫자가 없는 경우 (ex. "yesterday" 등) 스크롤 중단
+            contains_number = any(re.search(r'\d', text) for text in new_date_texts)
+            if not contains_number:
+                return
 
-                previous_date_texts.extend(new_date_texts)
-                # 페이지 하단으로 스크롤
-                self.driver.find_element(By.TAG_NAME, "body").send_keys(Keys.END)
+            previous_date_texts.extend(new_date_texts)
+            # 페이지 하단으로 스크롤
+            self.driver.find_element(By.TAG_NAME, "body").send_keys(Keys.END)
                 # print(f"⬇ 스크롤 {scroll + 1}회 실행")
 
             print("스크롤 도달, 중지")
-        except Exception as e:
-            print(f"Scroll error: {e}")
-            return
+        
         
     def extract_article_links(self, until=None) -> list:
         """
