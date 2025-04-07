@@ -5,7 +5,7 @@ import pymysql
 from urllib.parse import unquote
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import time
+import hashlib
 
 sqs = boto3.client('sqs')
 s3 = boto3.client('s3')
@@ -42,6 +42,10 @@ def read_txt(prefix):
     file_content = response['Body'].read().decode('utf-8')
     return file_content
 
+def assign_group_id(user_id, total_groups=10):
+    hashed = int(hashlib.sha256(str(user_id).encode()).hexdigest(), 16)
+    return f"group-{hashed % total_groups}"
+
 def lambda_handler(event, context):
      
     prefix = get_prefix()
@@ -66,18 +70,18 @@ def lambda_handler(event, context):
         
         with connection.cursor() as cursor:
             # receiver 테이블에서 이메일 주소 조회
-            cursor.execute(f"SELECT DISTINCT email_address FROM {DB_NAME}.{TABLE_NAME}")
-            emails = [row[0] for row in cursor.fetchall()]
+            cursor.execute(f"SELECT DISTINCT response_id, email_address FROM {DB_NAME}.{TABLE_NAME}")
+            rows = [row for row in cursor.fetchall()]
         
         connection.close()
         
-        if not emails:
+        if not rows:
             return {
                 'statusCode': 404,
                 'body': json.dumps('No email addresses found in receiver table')
             }
-        for address in emails:
-            MessageGroupId=f'group-{int(time.time())}'
+        for res_id, address in rows:
+            MessageGroupId=assign_group_id(user_id=res_id)
             # SQS로 메시지 전송
             message_body = {
                 'text': text,
