@@ -184,6 +184,7 @@ def save_to_rds(json_paths):
 
             if existing_earning:
                 # 최신 데이터와 기존 데이터가 다르면 업데이트
+                updated=False
                 for field, new_value in new_earning.items():
                     if getattr(existing_earning, field) != new_value:
                         setattr(existing_earning, field, new_value)

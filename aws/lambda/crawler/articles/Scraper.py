@@ -4,6 +4,8 @@ import time
 import boto3
 import json
 import re
+from botocore.config import Config
+from botocore.exceptions import ClientError
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -53,11 +55,16 @@ class WebScraper:
 
 
 class S3Uploader:
-    def __init__(self, bucket_name):
-        self.s3 = boto3.client("s3")
+    def __init__(self, bucket_name, max_retries=3, timeout=10):
+        # S3 클라이언트에 타임아웃 설정 추가
+        config = Config(connect_timeout=timeout, retries={'max_attempts': max_retries})
+        self.s3 = boto3.client("s3", config=config)
         self.bucket_name = bucket_name
+        self.max_retries = max_retries
+        print(f"S3Uploader 초기화 - 버킷: {self.bucket_name}, 최대 재시도: {max_retries}, 타임아웃: {timeout}초")
     
     def upload(self, theme, page_data):
+        print(f"S3 업로드 시작: {page_data['url']}")  # 업로드 시작 표시 추가
         today = datetime.now(ZoneInfo("America/New_York")).date()
         title = page_data["url"].rsplit("/", 1)[-1].replace(".html", "").replace("-", "_")
         
@@ -66,19 +73,39 @@ class S3Uploader:
             f"year={today.year}/month={today.strftime('%m')}/day={today.strftime('%d')}/"
         )
         s3_file_path = f"{s3_folder_path}{title}.json"
-        json_data = json.dumps(page_data, ensure_ascii=False, indent=4)
+        print(f"S3 경로 생성: {s3_file_path}")
         
-        try:
-            self.s3.put_object(
-                Bucket=self.bucket_name,
-                Key=s3_file_path,
-                Body=json_data.encode('utf-8'),
-                ContentType="application/json",
-            )
-            print(f"Uploaded to s3://{self.bucket_name}/{s3_file_path}")
-        except Exception as e:
-            print(f"S3 Upload Error: {e}")
+        json_data = json.dumps(page_data, ensure_ascii=False, indent=4)
+        print(f"JSON 데이터 크기: {len(json_data.encode('utf-8'))} 바이트")
 
+        # 재시도 로직
+        for attempt in range(self.max_retries):
+            try:
+                print(f"S3 업로드 시도 {attempt + 1}/{self.max_retries}: {s3_file_path}")
+                self.s3.put_object(
+                    Bucket=self.bucket_name,
+                    Key=s3_file_path,
+                    Body=json_data.encode('utf-8'),
+                    ContentType="application/json",
+                )
+                print(f"업로드 성공: s3://{self.bucket_name}/{s3_file_path}")
+                print(f"S3 업로드 완료: {page_data['url']}")
+                return True  # 성공 시 종료
+            except ClientError as e:
+                if "Network" in str(e) or "Timeout" in str(e):  # 네트워크 관련 오류 체크
+                    print(f"네트워크 오류 발생 - 시도 {attempt + 1} 실패: {e}")
+                    if attempt < self.max_retries - 1:
+                        wait_time = 2 ** attempt  # 지수 백오프: 1초, 2초, 4초
+                        print(f"{wait_time}초 대기 후 재시도...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"최대 재시도 횟수 초과 - 업로드 실패: {s3_file_path}")
+                else:
+                    print(f"기타 S3 오류: {e}")
+                    break
+            except Exception as e:
+                print(f"예상치 못한 오류: {e}")
+                break
 
 class ChromeDriver:
     def __init__(self):
@@ -98,142 +125,156 @@ class ChromeDriver:
         
     def start_driver(self):
         service = Service("/opt/chrome-driver/chromedriver-linux64/chromedriver")
-        print("Starting ChromeDriver...")
+        print("ChromeDriver 시작 중...")
         self.driver = webdriver.Chrome(service=service, options=self.options)
-        print(f"ChromeDriver started, Chrome version: {self.driver.capabilities['browserVersion']}")
+        print(f"ChromeDriver 시작 완료 - Chrome 버전: {self.driver.capabilities['browserVersion']}")
     
     def quit_driver(self):
         if self.driver:
+            print("ChromeDriver 종료 중...")
             self.driver.quit()
+            print("ChromeDriver 종료 완료")
     
     def scroll_down(self, max_scrolls=20, wait_time=2, until=None):
-        """
-        스크롤을 내리면서 'publishing' 클래스를 포함한 태그 내부의 텍스트를 확인.
-        날짜 정보에 숫자가 포함되지 않으면 스크롤을 중단하며,
-        최대 max_scrolls 횟수까지 스크롤합니다.
-        """
+        print(f"스크롤 시작 - 최대 {max_scrolls}회, 대기 시간 {wait_time}초")
         previous_date_texts = []
-        try:
-            for scroll in range(max_scrolls):
-                time.sleep(wait_time)  # 페이지 로드 대기
-                try:
-                    date_elements = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'publishing')]")
-                    date_texts = [el.get_attribute("textContent").split("•")[-1].strip() for el in date_elements]
-                except Exception as e:
-                    print("XPath 오류 발생:", e)
-                    return
+        for scroll in range(max_scrolls):
+            time.sleep(wait_time)
+            try:
+                date_elements = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'publishing')]")
+                date_texts = [el.get_attribute("textContent").split("•")[-1].strip() for el in date_elements]
+                print(f"스크롤 {scroll + 1}: {len(date_texts)}개의 날짜 요소 발견")
+            except Exception as e:
+                print(f"❌ XPath 오류 발생: {e}")
+                return
 
-                # 새로 로드된 날짜 텍스트 확인
-                new_date_texts = date_texts[len(previous_date_texts):]
+            new_date_texts = date_texts[len(previous_date_texts):]
+            print(f"새로 로드된 날짜 텍스트: {new_date_texts}")
 
-                if until == 'yesterday':
-                    # 날짜 정보에 숫자가 없는 경우 (ex. "yesterday" 등) 스크롤 중단
-                    contains_number = any(re.search(r'\d', text) for text in new_date_texts)
-                else:
-                    contains_number = any(re.search(r'(\d+)\s*(minutes?)', text) for text in new_date_texts)
-                if not contains_number:
-                    return
+            contains_number = any(re.search(r'\d', text) for text in new_date_texts)
+            if not contains_number:
+                print("날짜에 숫자가 없음 - 스크롤 중단")
+                return
 
-                previous_date_texts.extend(new_date_texts)
-                # 페이지 하단으로 스크롤
-                self.driver.find_element(By.TAG_NAME, "body").send_keys(Keys.END)
-                # print(f"⬇ 스크롤 {scroll + 1}회 실행")
+            previous_date_texts.extend(new_date_texts)
+            self.driver.find_element(By.TAG_NAME, "body").send_keys(Keys.END)
+            print(f"⬇ 스크롤 {scroll + 1}회 실행")
 
-            print("스크롤 도달, 중지")
-        except Exception as e:
-            print(f"Scroll error: {e}")
-            return
+        print("최대 스크롤 도달, 중지")
         
     def extract_article_links(self, until=None) -> list:
-        """
-        - 'content' 클래스를 포함한 div 요소들을 찾고,
-        - 내부의 footer > publishing 영역에서 날짜 텍스트를 확인하여,
-        - 날짜가 "yesterday"가 아닌 경우 해당 content 내부의 a 태그 href를 추출합니다.
-        """
+        print("기사 링크 추출 시작")
         article_links = []
         try:
             content_divs = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'content')]")
+            print(f"발견된 콘텐츠 요소 수: {len(content_divs)}")
         except Exception as e:
-            print("content 요소 찾기 실패:", e)
+            print(f"콘텐츠 요소 찾기 실패: {e}")
             return article_links
 
-        for content in content_divs:
+        for idx, content in enumerate(content_divs):
             try:
-                # 날짜 정보 추출 (footer > publishing)
                 date_element = content.find_element(
                     By.XPATH, ".//div[contains(@class, 'footer')]//div[contains(@class, 'publishing')]"
                 )
                 date_text = date_element.get_attribute("textContent").split("•")[-1].strip()
+                print(f"콘텐츠 {idx + 1}: 날짜 텍스트 - {date_text}")
             except Exception:
-                continue  # 날짜 정보가 없으면 스킵
+                print(f"콘텐츠 {idx + 1}: 날짜 정보 없음, 스킵")
+                continue
 
-            # 원래 코드의 로직: 날짜 정보가 "yesterday"가 아닌 경우 링크 추출
             if until == 'yesterday':
                 if "yesterday" != date_text:
                     try:
                         article_link = content.find_element(By.XPATH, ".//a").get_attribute("href")
                         article_links.append(article_link)
+                        print(f"링크 추가: {article_link}")
                     except Exception:
+                        print(f"콘텐츠 {idx + 1}: 링크 추출 실패")
                         continue
             else:
                 if re.search(r'(\d+)\s*(minutes?)', date_text):
                     try:
                         article_link = content.find_element(By.XPATH, ".//a").get_attribute("href")
                         article_links.append(article_link)
+                        print(f"링크 추가: {article_link}")
                     except Exception:
+                        print(f"콘텐츠 {idx + 1}: 링크 추출 실패")
                         continue
 
+        print(f"추출된 기사 링크 수: {len(article_links)}")
         return article_links
 
     def get_article_links(self, theme, url):
         for i in range(5):
             try:
-                print(f"Attempt {i+1}: Loading {url}")
+                print(f"시도 {i+1}: {url} 로드 중...")
                 self.driver.get(url)
-                print(f'{url}로 이동')
+                print(f"{url}로 이동 완료")
                 WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "publishing")))
                 break
             except Exception as e:
-                print(f"Attempt {i+1} failed: {e}")
+                print(f"시도 {i+1} 실패: {e}")
                 time.sleep(2)
         else:
-            raise Exception("All attempts failed")
+            raise Exception("모든 시도 실패")
         time.sleep(3)
-        print(f'{url}웹페이지 로딩 성공')
+        print(f"{url} 웹페이지 로딩 성공")
         until = 'yesterday' if theme != 'Latest' else None
         self.scroll_down(max_scrolls=20, wait_time=2, until=until)
         links = self.extract_article_links(until=until)
         return links
     
-
-
 def lambda_handler(event, context):
     load_dotenv()
     bucket_name = os.getenv("S3_BUCKET")
     theme = event["theme"]
     url = event["url"]
     s3_uploader = S3Uploader(bucket_name)
-    print("theme: " + theme)
-    print("url: " + url)
+    print(f"theme: {theme}")
+    print(f"url: {url}")
 
-    
     scraper = WebScraper(url)
     driver_manager = ChromeDriver()
     driver_manager.start_driver()
-    print('드라이버 생성')
+    print("드라이버 생성 완료")
     try:
+        print("기사 링크 수집 시작")
         article_links = driver_manager.get_article_links(theme, url)
+        print(f"총 기사 링크 수: {len(article_links)}")
+        print(f"수집된 링크 목록: {article_links}")
     except Exception as e:
-        print(f'{e}')
+        print(f"기사 링크 수집 실패: {e}")
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
     finally:
         driver_manager.quit_driver()
+
+    failed_uploads = []  # 실패한 업로드 추적
+    batch_size = 10
     try:
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(lambda l: s3_uploader.upload(theme, WebScraper(l).scrape()), link) for link in article_links]
-            for future in as_completed(futures):
-                future.result()
+        for i in range(0, len(article_links), batch_size):
+            batch = article_links[i:i + batch_size]
+            print("S3 업로드 시작 - 스레드 풀 사용")
+            with ThreadPoolExecutor() as executor:
+                futures = [executor.submit(lambda l: s3_uploader.upload(theme, WebScraper(l).scrape()), link) 
+                        for link in batch]
+                print(f"업로드 작업 수: {len(futures)}")
+                for idx, future in enumerate(as_completed(futures)):
+                    try:
+                        result = future.result()
+                        if not result:
+                            failed_uploads.append(article_links[idx])
+                        print(f"업로드 작업 {i + idx + 1} 완료 - 성공 여부: {result}")
+                    except Exception as e:
+                        print(f"업로드 작업 {i + idx + 1} 실패: {e}")
+                        failed_uploads.append(article_links[idx])
     except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}         
+        print(f"S3 업로드 중 전체 오류: {e}")
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+
+    if failed_uploads:
+        print(f"실패한 업로드 수: {len(failed_uploads)} - 링크: {failed_uploads}")
+        # 여기에 실패한 작업 재처리 로직 추가 가능 (예: 별도 큐에 저장)   
     
+    print("스크레이핑 및 업로드 완료")
     return {"statusCode": 200, "body": json.dumps({"message": "Scraping completed"})}
